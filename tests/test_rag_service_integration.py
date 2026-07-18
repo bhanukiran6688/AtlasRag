@@ -1,10 +1,8 @@
 import pytest
-import asyncio
-from unittest.mock import Mock, AsyncMock, patch
+from unittest.mock import Mock
 from langchain_core.documents import Document
 from src.services.rag_service import RAGService, RAGResult
-from src.retrievers.retriever import RetrievalResult, Retriever
-from src.prompts.prompt_builder import ContextBuilder, PromptBuilder
+from src.retrievers.retriever import RetrievalResult
 from src.guardrails.input_guardrails import InputGuardrails, OutputGuardrails
 from src.llm.base import LLMGateway, LLMResponse, LLMUsage
 

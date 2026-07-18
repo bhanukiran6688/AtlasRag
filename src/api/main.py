@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 import time
 import uuid
 
-from src.api.models import RAGRequest, RAGResponse, HealthResponse, ErrorResponse, RetrievedChunk
+from src.api.models import RAGRequest, RAGResponse, HealthResponse, RetrievedChunk
 from src.services.factory import create_rag_service
 from src.utils.logger import get_logger
 from src.utils.exceptions import RAGConfigurationError, GatewayError, RetrievalError

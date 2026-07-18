@@ -1,6 +1,5 @@
 import pytest
 from unittest.mock import MagicMock, patch
-from pathlib import Path
 from src.index import process_and_index_file, IndexManifest
 from langchain_core.documents import Document
 

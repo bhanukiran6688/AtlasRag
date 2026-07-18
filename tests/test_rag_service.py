@@ -2,7 +2,6 @@ import pytest
 from unittest.mock import MagicMock
 from src.services.rag_service import RAGService, RAGResult
 from src.retrievers.retriever import RetrievalResult
-from src.prompts.prompt_builder import ContextBuilder, PromptBuilder
 from src.llm.base import LLMResponse, LLMUsage
 from langchain_core.documents import Document
 

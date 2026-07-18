@@ -1,6 +1,5 @@
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.documents import Document
-from typing import Optional
 
 from src.config.settings import settings
 from src.utils.logger import get_logger

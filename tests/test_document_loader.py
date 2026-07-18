@@ -1,5 +1,4 @@
 import pytest
-from pathlib import Path
 from langchain_core.documents import Document
 from src.loaders.document_loader import DocumentLoader, DocumentCleaner
 

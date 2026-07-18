@@ -1,7 +1,6 @@
 import pytest
 from unittest.mock import Mock, AsyncMock
 from src.services.query_planner import QueryPlanner
-from src.llm.base import LLMResponse, LLMUsage
 
 
 class TestQueryPlanner:

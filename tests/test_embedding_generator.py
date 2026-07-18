@@ -1,7 +1,6 @@
 import pytest
 from unittest.mock import Mock, patch
 from src.embeddings.embedding_generator import EmbeddingGenerator, HuggingFaceEmbeddingAdapter
-from src.utils.exceptions import RAGConfigurationError
 
 
 class TestHuggingFaceEmbeddingAdapter:
@@ -43,7 +42,6 @@ class TestEmbeddingGenerator:
         ))
         
         with patch("src.embeddings.embedding_generator.HuggingFaceEmbeddingAdapter") as mock_adapter:
-            generator = EmbeddingGenerator()
             mock_adapter.assert_called_once_with("test-model")
 
     def test_gemini_provider_initialization(self, monkeypatch):
@@ -54,7 +52,6 @@ class TestEmbeddingGenerator:
         ))
         
         with patch("src.embeddings.embedding_generator.GoogleGenerativeAIEmbeddings") as mock_embeddings:
-            generator = EmbeddingGenerator()
             mock_embeddings.assert_called_once_with(model="test-model")
 
     def test_unsupported_provider_raises_error(self, monkeypatch):
