@@ -12,6 +12,7 @@ from src.config.settings import settings
 from src.embeddings.embedding_generator import EmbeddingGenerator
 from src.loaders.document_loader import DocumentCleaner, DocumentLoader
 from src.vectorstores.base import VectorStore, VectorStoreFactory
+from src.retrievers.bm25_index import BM25Index
 
 
 MANIFEST_PATH = settings.data_dir / "index_manifest.json"
@@ -156,9 +157,15 @@ def process_and_index_file(
     splitter: DocumentSplitter,
     vector_store: VectorStore,
     manifest: IndexManifest,
+    bm25_index: BM25Index | None = None,
 ) -> int:
     """
     Load, clean, split, identify, and index a single document.
+    
+    RAG Concept: Multi-Index Ingestion
+    - Documents are indexed in both vector store (for semantic search) and BM25 index (for lexical search)
+    - This enables true hybrid search where both semantic and lexical retrieval work over the full corpus
+    - Vector embeddings capture meaning, BM25 captures exact keyword matches
     """
 
     try:
@@ -169,12 +176,35 @@ def process_and_index_file(
 
         previous_entry = manifest.get_file(file_path)
         if previous_entry and previous_entry.chunk_ids:
+            # RAG Concept: Document Deletion from Multiple Indices
+            # When re-indexing, remove old chunks from both vector store and BM25 index
             vector_store.delete_documents(previous_entry.chunk_ids)
+            if bm25_index:
+                for chunk_id in previous_entry.chunk_ids:
+                    bm25_index.delete_document(chunk_id)
 
         documents = DocumentCleaner.clean_documents(DocumentLoader.load_file(file_path))
         chunks = splitter.split_documents(documents=documents, file_type=file_path.suffix.lstrip("."))
         chunk_ids = add_chunk_identity(chunks=chunks, file_path=file_path, content_hash=content_hash)
+        
+        # Index in vector store for semantic search
         vector_store.add_documents(chunks)
+        
+        # RAG Concept: BM25 Indexing for Lexical Search
+        # Index each chunk in the BM25 index for full corpus lexical search
+        # This enables hybrid search where BM25 can find documents that dense search might miss
+        if bm25_index:
+            for chunk in chunks:
+                chunk_id = chunk.metadata.get("chunk_id")
+                if chunk_id:
+                    bm25_index.add_document(
+                        doc_id=chunk_id,
+                        content=chunk.page_content,
+                        metadata=chunk.metadata
+                    )
+            # Persist BM25 index after each file for crash recovery
+            bm25_index.save_index()
+        
         manifest.record_file(file_path=file_path, content_hash=content_hash, chunks_indexed=len(chunks), chunk_ids=chunk_ids)
         print(f"Indexed {len(chunks)} chunks from {file_path.name}")
         return len(chunks)
@@ -199,7 +229,7 @@ def main() -> None:
     if not settings.documents_dir.exists():
         raise IngestionError(f"Documents directory does not exist: {settings.documents_dir}")
 
-    splitter = DocumentSplitter()
+    splitter = DocumentSplitter(enable_parent_child=settings.enable_parent_child_retrieval)
     embedding_generator = EmbeddingGenerator()
     vector_store = VectorStoreFactory.create(embeddings=embedding_generator.get_embeddings())
     manifest = IndexManifest(MANIFEST_PATH)

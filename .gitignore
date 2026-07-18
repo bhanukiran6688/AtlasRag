@@ -8,3 +8,4 @@ logs/*.log
 
 chroma_db/
 data/index_manifest.json
+.idea/vcs.xml

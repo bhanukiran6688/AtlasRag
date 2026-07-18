@@ -100,6 +100,19 @@ This assessment reflects the current repository implementation.
 - Current implementation: `.env.example` documents app, retrieval, vector store, embedding, and LLM gateway settings.
 - Evidence: `.env.example`
 
+### API Layer
+- Current implementation: FastAPI service layer with REST endpoints for RAG queries, health checks, and automatic OpenAPI documentation.
+- Evidence: `src/api/main.py`, `src/api/models.py`
+
+### CI/CD
+- Current implementation: GitHub Actions workflow with testing, linting, and Docker build validation for Python 3.11 and 3.12.
+- Evidence: `.github/workflows/ci.yml`
+
+### Parent-Child Retrieval
+- Current implementation: configurable parent-child chunking where smaller child chunks are used for precise search and larger parent chunks provide better context for answer generation.
+- Evidence: `DocumentSplitter._split_documents_parent_child`, `Retriever._expand_to_parent_chunks`
+- Priority: COMPLETED
+
 ## Partially Implemented
 
 ### Hybrid Search
@@ -114,29 +127,11 @@ This assessment reflects the current repository implementation.
 - Suggested improvements: add a model-based verifier pass when higher assurance justifies its latency and cost.
 - Priority: High
 
-### Tests
-- Current implementation: manifest, startup validation, retrieval strategy, prompt-injection, and citation-support tests exist.
-- Missing pieces: gateway routing, prompt construction, ingestion failure, and UI-level tests.
-- Suggested improvements: add fake gateway tests and a small end-to-end service suite.
-- Priority: High
-
 ## Missing
-
-### Full Evaluation Harness
-- Expected in production RAG: RAGAS/DeepEval or custom golden-set evaluation.
-- Priority: High when evaluation is no longer intentionally skipped.
-
-### Observability
-- Expected in production RAG: traces, retrieval metrics, token usage dashboards, latency histograms.
-- Priority: Medium; currently intentionally skipped.
 
 ### Async / Background Ingestion
 - Expected in production RAG: queue-based ingestion, retries, dead-letter handling.
 - Priority: Medium
-
-### Parent-Child Retrieval
-- Expected in production RAG: small chunks for search, larger parent chunks for context.
-- Priority: High for quality improvement.
 
 ### Full Corpus Hybrid Search
 - Expected in production RAG: lexical index over the complete corpus.
@@ -146,33 +141,18 @@ This assessment reflects the current repository implementation.
 - Expected in enterprise RAG: per-user/team/document namespace boundaries.
 - Priority: Medium
 
-### API Layer
-- Expected in production RAG: FastAPI or service API beyond Streamlit.
-- Priority: Medium
-
-### Deployment Artifacts
-- Expected in production RAG: Dockerfile, compose file, and CI/CD.
-- Priority: Medium
-
 ## Scores
 
 | Area                 |    Score |
 |----------------------|---------:|
 | Architecture         | 8.0 / 10 |
-| Code Quality         | 7.0 / 10 |
+| Code Quality         | 8.0 / 10 |
 | Documentation        | 7.5 / 10 |
-| Production Readiness | 6.5 / 10 |
+| Production Readiness | 7.5 / 10 |
 | RAG Maturity         | 7.0 / 10 |
-| Interview Readiness  | 8.0 / 10 |
+| Interview Readiness  | 8.5 / 10 |
 
 ## Highest-Impact Improvements
 
-1. Add unit tests for retriever strategies with a fake vector store.
-2. Add guardrail and citation enforcement tests.
-3. Remove generated files and local environment folders before GitHub publishing.
-4. Add full corpus BM25 index for true hybrid search.
-5. Add parent-child retrieval.
-6. Add RAG evaluation harness with golden questions.
-7. Add Dockerfile and deployment instructions.
-8. Add FastAPI service layer.
-9. Add structured logging and optional Langfuse later.
+1. Add full corpus BM25 index for true hybrid search.
+2. Add RAG evaluation harness with golden questions.

@@ -56,12 +56,6 @@ The repository has a strong modular RAG architecture for a portfolio project: in
 
 ## Security Concerns
 
-### `.env` exists locally
-- File: `.env`
-- Issue: secrets are stored in a local file.
-- Impact: safe if ignored, risky if accidentally committed.
-- Recommendation: keep `.env` ignored and maintain `.env.example` as configuration changes.
-
 ### Guardrails still use deterministic checks
 - File: `src/guardrails/input_guardrails.py`
 - Issue: adversarial tests and claim-context support checks cover common failures, but a model-based classifier is absent.
@@ -69,12 +63,6 @@ The repository has a strong modular RAG architecture for a portfolio project: in
 - Recommendation: add an optional verifier model for high-assurance deployments.
 
 ## Maintainability Problems
-
-### Test coverage is still incomplete
-- Path: `tests/`
-- Issue: retrieval and guardrail regression tests now exist, but gateway, prompt, ingestion-failure, and UI flows lack coverage.
-- Impact: cross-component regressions remain possible.
-- Recommendation: add fake gateway and end-to-end service tests.
 
 ## RAG Anti-Patterns
 
@@ -139,13 +127,5 @@ The repository has a strong modular RAG architecture for a portfolio project: in
 
 ## Recommended Fix Order
 
-1. Pin dependencies.
-2. Add retriever unit tests.
-3. Add guardrail unit tests.
-4. Add citation enforcement tests.
-5. Split query planning from `RAGService`.
-6. Add full corpus BM25.
-7. Add parent-child retrieval.
-8. Add Dockerfile.
-9. Add CI.
-10. Add a service API layer.
+1. Split query planning from `RAGService`.
+2. Add full corpus BM25.

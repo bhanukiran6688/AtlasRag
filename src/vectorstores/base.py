@@ -1,12 +1,9 @@
-from abc import ABC, abstractmethod
 from typing import Any
-
+from abc import ABC, abstractmethod
 from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
 
 from src.config.settings import settings
-from src.vectorstores.chroma_store import ChromaStore
-from src.vectorstores.pinecone_store import PineconeStore
 
 
 class VectorStore(ABC):
@@ -77,7 +74,10 @@ class VectorStoreFactory:
     # Create the configured vector store after validating backend settings.
     @staticmethod
     def create(embeddings: Embeddings) -> VectorStore:
+        from src.vectorstores.chroma_store import ChromaStore
+        from src.vectorstores.pinecone_store import PineconeStore
         settings.validate_vector_store_configuration()
+
         provider = settings.vector_store.lower()
         if provider == "chroma":
             return ChromaStore(embeddings)

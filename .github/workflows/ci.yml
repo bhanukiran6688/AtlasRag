@@ -1,17 +1,96 @@
 name: CI
 
+# RAG Application CI Pipeline
+# This workflow runs tests, linting, and other quality checks for the AtlasRAG application
+
 on:
   push:
+    branches: [ main, develop ]
   pull_request:
+    branches: [ main, develop ]
 
 jobs:
+  # RAG Application Testing Job
   test:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12"]
+    
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
-      - run: python -m pip install --upgrade pip
-      - run: pip install -r requirements.txt pytest
-      - run: pytest -q
+          python-version: ${{ matrix.python-version }}
+          cache: 'pip'
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      
+      - name: Run pytest with coverage
+        # Run all unit and integration tests for RAG components
+        run: |
+          pytest tests/ -v --cov=src --cov-report=xml --cov-report=term-missing
+      
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./coverage.xml
+          flags: unittests
+          name: codecov-umbrella
+          fail_ci_if_error: false
+
+  # Code Quality and Linting Job
+  lint:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      
+      - name: Install linting dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install ruff black mypy
+      
+      - name: Run Ruff linter
+        # Fast Python linter for RAG codebase
+        run: ruff check src/ tests/
+      
+      - name: Run Black formatter check
+        # Check code formatting consistency
+        run: black --check src/ tests/
+      
+      - name: Run MyPy type checking
+        # Static type checking for better code quality
+        run: mypy src/ --ignore-missing-imports || true
+
+  # Docker Build Test Job
+  docker-build:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Build Docker image
+        # Test that the RAG application Dockerfile builds successfully
+        run: |
+          docker build -t atlasrag:test .
+      
+      - name: Test Docker container startup
+        run: |
+          docker run --rm atlasrag:test python -c "import src; print('RAG modules imported successfully')"

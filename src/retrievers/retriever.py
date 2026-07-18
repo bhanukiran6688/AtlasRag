@@ -10,6 +10,7 @@ from langchain_core.documents import Document
 from src.config.settings import settings
 from src.utils.logger import get_logger
 from src.vectorstores.base import VectorStore
+from src.retrievers.bm25_index import BM25Index
 
 
 logger = get_logger(__name__)
@@ -58,6 +59,13 @@ class Retriever:
         self.last_retrieval_time_ms: float = 0.0
         self.last_total_results: int = 0
         self.last_returned_results: int = 0
+        
+        # RAG Concept: Full Corpus BM25 Index
+        # Initialize persistent BM25 index for corpus-level lexical search
+        # This enables true hybrid search where BM25 searches the entire corpus,
+        # not just the dense vector candidates
+        self._bm25_index = BM25Index()
+        
         logger.info(
             "Retriever initialized with strategy=%s, k=%d, candidates=%d",
             settings.retrieval_strategy,
@@ -92,6 +100,11 @@ class Retriever:
 
         self.last_retrieval_time_ms = (perf_counter() - start) * 1000
         self.last_total_results = len(results)
+        
+        # FEATURE: Parent-child retrieval - if enabled, replace child chunks with parent chunks
+        if settings.enable_parent_child_retrieval:
+            results = self._expand_to_parent_chunks(results)
+        
         # Production note: reordering and deduplication happen after retrieval to keep
         # the final context diverse and more robust for downstream prompting.
         selected_results = self._apply_lost_middle_reordering(results[: self._k])
@@ -168,24 +181,95 @@ class Retriever:
             for rank, document in enumerate(documents, start=1)
         ]
 
-    # Combine dense retrieval and BM25 ranking with Reciprocal Rank Fusion.
+    # Combine dense retrieval and full corpus BM25 search with Reciprocal Rank Fusion.
+    # RAG Concept: True Hybrid Search
+    # - Dense search captures semantic meaning
+    # - BM25 search over full corpus captures exact keyword matches
+    # - RRF fuses both rankings for best results
     def _hybrid_search(
         self,
         query: str,
         metadata_filter: dict[str, Any] | None,
     ) -> list[RetrievalResult]:
+        # Get dense vector results (semantic search)
         dense_results = self._similarity_search(query=query, metadata_filter=metadata_filter)
-        bm25_results = self._bm25_rank(query=query, results=dense_results)
+        
+        # Get BM25 results from full corpus (lexical search)
+        # RAG Concept: Full Corpus BM25
+        # - Unlike candidate-level BM25 which only ranks dense results,
+        # - Full corpus BM25 searches ALL documents independently
+        # - This preserves lexical-only matches that dense search might miss
+        bm25_ranked = self._bm25_index.search(query=query, k=settings.retrieval_candidate_k)
+        
+        # Convert BM25 results to RetrievalResult format
+        # Need to fetch actual documents from vector store using doc_ids
+        bm25_results = self._bm25_results_to_retrieval_results(bm25_ranked, metadata_filter)
+        
+        # Fuse dense and BM25 results using Reciprocal Rank Fusion
         fused_results = self._reciprocal_rank_fusion(
             ranked_lists=[dense_results, bm25_results],
             strategy="hybrid",
         )
+        
         logger.info(
-            "Hybrid retrieval fused %d dense and %d BM25 candidates.",
+            "Full corpus hybrid retrieval fused %d dense and %d BM25 candidates.",
             len(dense_results),
             len(bm25_results),
         )
         return fused_results
+
+    # Convert BM25 ranked results to RetrievalResult format by fetching documents from vector store
+    # RAG Concept: Bridging Lexical and Vector Search
+    # - BM25 returns (doc_id, score) tuples
+    # - Need to fetch actual document content from vector store
+    # - This bridges the gap between lexical index and vector store
+    def _bm25_results_to_retrieval_results(
+        self,
+        bm25_ranked: list[tuple[str, float]],
+        metadata_filter: dict[str, Any] | None
+    ) -> list[RetrievalResult]:
+        """
+        Convert BM25 search results to RetrievalResult objects.
+        
+        Args:
+            bm25_ranked: List of (doc_id, bm25_score) tuples from BM25 search
+            metadata_filter: Optional metadata filter to apply
+            
+        Returns:
+            List of RetrievalResult objects with documents fetched from vector store
+        """
+        if not bm25_ranked:
+            return []
+        
+        results = []
+        
+        for rank, (doc_id, bm25_score) in enumerate(bm25_ranked, start=1):
+            try:
+                # Fetch document from vector store using doc_id
+                # Note: This requires vector store to support lookup by doc_id
+                # If not supported, we may need to store document content in BM25 index
+                docs = self._vector_store.similarity_search_with_score(
+                    query="",  # Empty query since we're filtering by doc_id
+                    k=1,
+                    metadata_filter={"chunk_id": doc_id} if doc_id else None
+                )
+                
+                if docs:
+                    document, distance = docs[0]
+                    # Use negative BM25 score as distance (higher BM25 = better = lower distance)
+                    results.append(RetrievalResult(
+                        rank=rank,
+                        document=document,
+                        distance=-bm25_score,  # Negative because BM25 is higher-is-better
+                        retrieval_strategy="bm25_full_corpus"
+                    ))
+                else:
+                    logger.warning("Could not find document %s in vector store", doc_id)
+                    
+            except Exception as exc:
+                logger.warning("Failed to fetch document %s from vector store: %s", doc_id, exc)
+        
+        return results
 
     # Rank dense candidates lexically with a local BM25 scorer.
     def _bm25_rank(self, query: str, results: list[RetrievalResult]) -> list[RetrievalResult]:
@@ -294,6 +378,75 @@ class Retriever:
             batch_size,
         )
         return reranked + results[len(candidate_results) :]
+
+    # Expand child chunks to their parent chunks for better context.
+    def _expand_to_parent_chunks(self, results: list[RetrievalResult]) -> list[RetrievalResult]:
+        """
+        Replace child chunks with their parent chunks when parent-child retrieval is enabled.
+        This provides larger context chunks for answer generation while maintaining
+        precise search through smaller child chunks.
+        """
+        parent_chunks_map = {}
+        child_results = []
+        
+        for result in results:
+            is_parent = result.document.metadata.get("is_parent", False)
+            parent_id = result.document.metadata.get("parent_id")
+            
+            if is_parent:
+                # This is already a parent chunk, keep it
+                if parent_id not in parent_chunks_map:
+                    parent_chunks_map[parent_id] = result
+            else:
+                # This is a child chunk, track it for parent lookup
+                child_results.append((parent_id, result))
+        
+        # For each child result, try to find its parent chunk
+        expanded_results = []
+        seen_parent_ids = set()
+        
+        # First, add any parent chunks that were directly retrieved
+        for parent_id, parent_result in parent_chunks_map.items():
+            expanded_results.append(parent_result)
+            seen_parent_ids.add(parent_id)
+        
+        # Then, for child chunks, fetch their parents from the vector store
+        for parent_id, child_result in child_results:
+            if parent_id and parent_id not in seen_parent_ids:
+                # Try to find the parent chunk in the vector store
+                try:
+                    parent_filter = {"parent_id": parent_id, "is_parent": True}
+                    parent_docs = self._vector_store.similarity_search_with_score(
+                        query="",  # Empty query since we're filtering by metadata
+                        k=1,
+                        metadata_filter=parent_filter
+                    )
+                    
+                    if parent_docs:
+                        parent_doc, parent_score = parent_docs[0]
+                        parent_result = RetrievalResult(
+                            rank=child_result.rank,
+                            document=parent_doc,
+                            distance=child_result.distance,  # Keep child's distance score
+                            retrieval_strategy="parent_child",
+                            rerank_score=child_result.rerank_score
+                        )
+                        expanded_results.append(parent_result)
+                        seen_parent_ids.add(parent_id)
+                        logger.debug("Expanded child chunk to parent: %s", parent_id)
+                    else:
+                        # Parent not found, keep the child chunk
+                        expanded_results.append(child_result)
+                except Exception as exc:
+                    logger.warning("Failed to fetch parent chunk for %s: %s", parent_id, exc)
+                    expanded_results.append(child_result)
+            else:
+                # No parent_id or already seen, keep the child
+                expanded_results.append(child_result)
+        
+        logger.info("Expanded %d results to %d chunks using parent-child retrieval", 
+                   len(results), len(expanded_results))
+        return expanded_results
 
     # Lazily load the cross-encoder reranker to avoid startup overhead.
     def _get_reranker(self):

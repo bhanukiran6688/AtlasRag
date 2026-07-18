@@ -15,6 +15,7 @@ class Settings(BaseSettings):
 
     chunk_size: int = 800
     chunk_overlap: int = 100
+    enable_parent_child_retrieval: bool = False
     log_level: str = "INFO"
     data_dir: Path = PROJECT_ROOT / "data"
     documents_dir: Path = data_dir / "documents"
