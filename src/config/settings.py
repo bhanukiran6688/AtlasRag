@@ -51,6 +51,7 @@ class Settings(BaseSettings):
     max_context_tokens: int = 1800
     conversation_memory_max_turns: int = 4
     conversation_memory_max_tokens: int = 2000
+    guardrails_enable_semantic_verification: bool = False
     context_compression_max_sentences: int = 3
     cost_optimization_max_context_chunks: int = 4
     cost_optimization_enable_prompt_simplification: bool = True

@@ -1,4 +1,5 @@
 import re
+from typing import Any
 from dataclasses import dataclass, field
 
 from src.retrievers.retriever import RetrievalResult
@@ -166,6 +167,11 @@ class OutputGuardrails:
 
     This is a second safety layer: input checks stop risky requests, output
     checks stop prompt leakage and reduce unsupported answers.
+
+    RAG Concept: Semantic Hallucination Mitigation
+    - Lexical checks: match exact terms in claims to context
+    - Semantic checks: use LLM to understand meaning and detect paraphrases
+    - Combined approach: faster lexical check first, semantic check for high-stakes scenarios
     """
 
     _leakage_patterns = [
@@ -188,16 +194,20 @@ class OutputGuardrails:
     )
 
     def __init__(
-        self, claim_support_verifier: ClaimSupportVerifier | None = None
+        self,
+        claim_support_verifier: ClaimSupportVerifier | None = None,
+        semantic_verifier: Any = None,
     ) -> None:
         self._claim_support_verifier = claim_support_verifier or ClaimSupportVerifier()
+        self._semantic_verifier = semantic_verifier
 
-    def validate(
+    async def validate(
         self,
         answer: str,
         citations: list[dict[str, str]],
         retrieved_chunks: list[RetrievalResult],
         claims: list[dict[str, object]] | None = None,
+        context: str = "",
     ) -> OutputGuardrailResult:
         leakage_reason = self._find_prompt_leakage(answer)
         if leakage_reason:
@@ -229,6 +239,33 @@ class OutputGuardrails:
                 is_grounded=False,
                 grounding_reason=claim_error,
             )
+
+        # RAG Concept: Semantic Verification
+        # If semantic verifier is enabled and claims passed lexical checks,
+        # perform additional semantic verification for higher assurance
+        if (
+            self._semantic_verifier
+            and settings.guardrails_enable_semantic_verification
+            and claims
+        ):
+            all_supported, verified_claims = await self._semantic_verifier.verify_answer(
+                answer=answer, claims=claims, context=context
+            )
+            if not all_supported:
+                unsupported_claims = [
+                    c["text"] for c in verified_claims if not c["is_supported"]
+                ]
+                logger.warning(
+                    "Semantic verification failed for %d claims: %s",
+                    len(unsupported_claims),
+                    unsupported_claims[:2],
+                )
+                return OutputGuardrailResult(
+                    answer="I don't have enough information in the provided documents.",
+                    citations=[],
+                    is_grounded=False,
+                    grounding_reason="Semantic verification found unsupported claims.",
+                )
 
         if not valid_citations:
             logger.warning("Blocked ungrounded answer without valid citations.")

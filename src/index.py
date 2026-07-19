@@ -268,6 +268,9 @@ def main() -> None:
         print(f"No files found in {settings.documents_dir.resolve()}")
         return
 
+    # Initialize BM25 index for full corpus lexical search
+    bm25_index = BM25Index()
+
     total_files = len(files)
     files_processed = 0
     chunks_indexed = 0
@@ -280,6 +283,7 @@ def main() -> None:
             splitter=splitter,
             vector_store=vector_store,
             manifest=manifest,
+            bm25_index=bm25_index,
         )
         print(f"Finished {file.name} in {perf_counter() - file_start:.3f} sec")
 
@@ -288,6 +292,9 @@ def main() -> None:
             files_processed += 1
 
     manifest.save()
+
+    # Save BM25 index after all files processed
+    bm25_index.save_index()
 
     print("\n" + "=" * 70)
     print("Indexing Summary")
@@ -298,6 +305,8 @@ def main() -> None:
     print(f"Store Name      : {vector_store.name}")
     print(f"Location        : {vector_store.location}")
     print(f"Manifest        : {MANIFEST_PATH}")
+    print(f"BM25 Index      : {bm25_index.index_path}")
+    print(f"BM25 Documents  : {bm25_index.total_docs}")
     print(f"Total Runtime   : {perf_counter() - overall_start:.3f} sec")
     print("=" * 70)
 

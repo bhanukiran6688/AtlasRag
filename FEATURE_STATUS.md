@@ -61,8 +61,8 @@ This assessment reflects the current repository implementation.
 - Evidence: `ContextBuilder`
 
 ### Query Expansion and Decomposition
-- Current implementation: optional query expansion/decomposition with adaptive triggers, LLM limits, and heuristic fallback.
-- Evidence: `RAGService._build_retrieval_queries`
+- Current implementation: optional query expansion/decomposition with adaptive triggers, LLM limits, heuristic fallback, and in-memory caching to reduce LLM calls.
+- Evidence: `QueryPlanner`, `RAGService._build_retrieval_queries`
 
 ### Cost Optimization
 - Current implementation: cache, context trimming, prompt simplification, query-planning call limits, and LLM budget checks.
@@ -77,16 +77,16 @@ This assessment reflects the current repository implementation.
 - Evidence: `InputGuardrails`, `OutputGuardrails`
 
 ### Citation Enforcement
-- Current implementation: structured output includes claims and citations; every claim must have a valid retrieved citation.
-- Evidence: `OutputGuardrails._validate_claims`
+- Current implementation: structured output includes claims and citations; every claim must have a valid retrieved citation. Uses type-safe Pydantic schemas for validation.
+- Evidence: `OutputGuardrails._validate_claims`, `src/schemas/structured_output.py`
 
 ### In-Memory Caching
 - Current implementation: bounded TTL cache for repeated gateway responses.
 - Evidence: `src/cache/in_memory_cache.py`
 
 ### Conversation Memory
-- Current implementation: per-session Streamlit history is displayed and bounded before prompt injection.
-- Evidence: `app.py`, `RAGService.update_conversation_history`
+- Current implementation: per-session Streamlit history is displayed and bounded by both turns and tokens before prompt injection for accurate cost control.
+- Evidence: `app.py`, `RAGService.update_conversation_history`, `RAGService._limit_by_tokens`
 
 ### Startup Validation
 - Current implementation: embedding, vector store, and LLM settings are validated before startup.
@@ -113,16 +113,21 @@ This assessment reflects the current repository implementation.
 - Evidence: `DocumentSplitter._split_documents_parent_child`, `Retriever._expand_to_parent_chunks`
 - Priority: COMPLETED
 
+### Metadata Schema Management
+- Current implementation: comprehensive guide for handling metadata schema changes with reindex procedures, best practices, and rollback instructions.
+- Evidence: `METADATA_REINDEX_GUIDE.md`
+- Priority: COMPLETED
+
 ## Partially Implemented
 
 ### Hybrid Search
-- Current implementation: BM25 ranks dense vector candidates, then RRF fuses dense and lexical rankings.
+- Current implementation: BM25 ranks dense vector candidates with NLTK-based stemming and stopword filtering, then RRF fuses dense and lexical rankings. Scores are normalized to 0-1 range for consistent interpretation.
 - Missing pieces: full corpus-level BM25 index, persistent lexical index, weighting controls beyond RRF.
 - Suggested improvements: add a local BM25 index over all chunks or integrate OpenSearch/Elasticsearch.
 - Priority: High
 
 ### Hallucination Mitigation
-- Current implementation: context-only prompt, structured output, citation validation, lexical claim-to-citation support checks, and abstention fallback.
+- Current implementation: context-only prompt, structured output, citation validation, lexical claim-to-citation support checks, abstention fallback, and tests for insufficient-information responses.
 - Missing pieces: semantic verifier model, answer-span attribution, and faithfulness scoring.
 - Suggested improvements: add a model-based verifier pass when higher assurance justifies its latency and cost.
 - Priority: High
@@ -145,12 +150,12 @@ This assessment reflects the current repository implementation.
 
 | Area                 |    Score |
 |----------------------|---------:|
-| Architecture         | 8.0 / 10 |
-| Code Quality         | 8.0 / 10 |
-| Documentation        | 7.5 / 10 |
+| Architecture         | 8.5 / 10 |
+| Code Quality         | 8.5 / 10 |
+| Documentation        | 8.0 / 10 |
 | Production Readiness | 7.5 / 10 |
-| RAG Maturity         | 7.0 / 10 |
-| Interview Readiness  | 8.5 / 10 |
+| RAG Maturity         | 7.5 / 10 |
+| Interview Readiness  | 9.0 / 10 |
 
 ## Highest-Impact Improvements
 
