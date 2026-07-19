@@ -5,8 +5,9 @@ going beyond lexical matching to detect paraphrases and logical contradictions.
 """
 
 from typing import Any
-from src.llm.base import LLMGateway, LLMResponse
+from src.llm.base import LLMGateway
 from src.utils.logger import get_logger
+from src.config.settings import settings
 
 logger = get_logger(__name__)
 
@@ -146,7 +147,3 @@ Return ONLY valid JSON with this format:
         )
 
         return all_supported, verified_claims
-
-
-# Import settings at module level to avoid circular imports
-from src.config.settings import settings

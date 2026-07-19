@@ -9,7 +9,6 @@ This module handles intelligent query transformation to improve retrieval qualit
 import hashlib
 import json
 import re
-from functools import lru_cache
 
 from src.config.settings import settings
 from src.llm.base import LLMGateway
