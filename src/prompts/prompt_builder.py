@@ -30,7 +30,7 @@ class ContextBuilder:
                 continue
 
             seen_chunks.add(chunk)
-            page = (result.page if result.page is not None else "Unknown")
+            page = result.page if result.page is not None else "Unknown"
             sections.append(
                 f"Document {result.rank}\n"
                 f"Source : {result.source}\n"
@@ -41,7 +41,7 @@ class ContextBuilder:
         if not sections:
             logger.info("Context is empty after duplicate removal.")
             return ""
-        
+
         context = (
             "Context\n"
             + "=" * 80
@@ -50,7 +50,9 @@ class ContextBuilder:
         )
 
         # FEATURE: Context window management
-        context = ContextBuilder._truncate_context(context, max_tokens=settings.max_context_tokens)
+        context = ContextBuilder._truncate_context(
+            context, max_tokens=settings.max_context_tokens
+        )
 
         # FEATURE: Lightweight context compression
         context = ContextBuilder._compress_context(context)
@@ -81,7 +83,10 @@ class ContextBuilder:
         if not truncated_parts:
             return " ".join(context.split()[:max_tokens])
 
-        return "\n\n".join(truncated_parts) + "\n\n... [context truncated for token budget]"
+        return (
+            "\n\n".join(truncated_parts)
+            + "\n\n... [context truncated for token budget]"
+        )
 
     # Compress context lines by keeping metadata and shortening long text lines.
     @staticmethod
@@ -93,11 +98,18 @@ class ContextBuilder:
         lines = context.splitlines()
         compressed_lines: list[str] = []
         for line in lines:
-            if line.strip().startswith("Document ") or line.strip().startswith("Source") or line.strip().startswith("Page"):
+            if (
+                line.strip().startswith("Document ")
+                or line.strip().startswith("Source")
+                or line.strip().startswith("Page")
+            ):
                 compressed_lines.append(line)
             elif line.strip():
                 compressed_text = ContextBuilder._compress_text(line)
-                if compressed_text and (not compressed_lines or compressed_lines[-1].strip() != compressed_text):
+                if compressed_text and (
+                    not compressed_lines
+                    or compressed_lines[-1].strip() != compressed_text
+                ):
                     compressed_lines.append(compressed_text)
 
         return "\n".join(compressed_lines)
@@ -109,9 +121,15 @@ class ContextBuilder:
         if not sentence_parts:
             return text.strip()
 
-        compressed_sentences = sentence_parts[: settings.context_compression_max_sentences]
+        compressed_sentences = sentence_parts[
+            : settings.context_compression_max_sentences
+        ]
         compressed_text = " ".join(compressed_sentences)
-        return compressed_text if len(compressed_text) < len(text.strip()) else text.strip()
+        return (
+            compressed_text
+            if len(compressed_text) < len(text.strip())
+            else text.strip()
+        )
 
     # Limit the number of context chunks injected into the final LLM prompt.
     @staticmethod
@@ -123,7 +141,10 @@ class ContextBuilder:
         if len(chunks) <= max_context_chunks:
             return context
 
-        return "\n\n".join(chunks[:max_context_chunks]) + "\n\n... [context trimmed for cost optimization]"
+        return (
+            "\n\n".join(chunks[:max_context_chunks])
+            + "\n\n... [context trimmed for cost optimization]"
+        )
 
     # Estimate prompt size with a lightweight whitespace token approximation.
     @staticmethod
@@ -156,7 +177,11 @@ class PromptBuilder:
 
         history_block = ""
         if conversation_history:
-            history_lines = [f"{turn['role'].title()}: {turn['content']}" for turn in conversation_history if turn.get("content")]
+            history_lines = [
+                f"{turn['role'].title()}: {turn['content']}"
+                for turn in conversation_history
+                if turn.get("content")
+            ]
             if history_lines:
                 history_block = "\n".join(history_lines)
 
@@ -164,7 +189,9 @@ class PromptBuilder:
             max_context_chunks = settings.cost_optimization_max_context_chunks
 
         if simplify_prompt:
-            context = ContextBuilder._trim_context_to_chunks(context, max_context_chunks)
+            context = ContextBuilder._trim_context_to_chunks(
+                context, max_context_chunks
+            )
 
         prompt = f"""You are a helpful AI assistant.
         Answer the user's question using ONLY the provided context.

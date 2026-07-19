@@ -2,7 +2,11 @@ import re
 from typing import TYPE_CHECKING
 
 from src.config.settings import settings
-from src.utils.citations import citation_source_name, normalize_citation_page, normalize_citation_value
+from src.utils.citations import (
+    citation_source_name,
+    normalize_citation_page,
+    normalize_citation_value,
+)
 
 if TYPE_CHECKING:
     from src.retrievers.retriever import RetrievalResult
@@ -12,8 +16,29 @@ class ClaimSupportVerifier:
     """Checks that cited context contains meaningful terms from each claim."""
 
     _stop_words = {
-        "a", "an", "and", "are", "as", "at", "be", "by", "for", "from", "in", "is", "it",
-        "of", "on", "or", "that", "the", "this", "to", "was", "were", "with",
+        "a",
+        "an",
+        "and",
+        "are",
+        "as",
+        "at",
+        "be",
+        "by",
+        "for",
+        "from",
+        "in",
+        "is",
+        "it",
+        "of",
+        "on",
+        "or",
+        "that",
+        "the",
+        "this",
+        "to",
+        "was",
+        "were",
+        "with",
     }
 
     # RAG feature: reject claims whose cited chunks do not provide enough lexical support.
@@ -48,7 +73,9 @@ class ClaimSupportVerifier:
         }
 
     @staticmethod
-    def _matches_any_citation(chunk: "RetrievalResult", citations: list[dict[str, str]]) -> bool:
+    def _matches_any_citation(
+        chunk: "RetrievalResult", citations: list[dict[str, str]]
+    ) -> bool:
         chunk_page = normalize_citation_page(chunk.page)
         chunk_sources = {
             normalize_citation_value(chunk.source),
@@ -57,8 +84,10 @@ class ClaimSupportVerifier:
         return any(
             normalize_citation_page(citation.get("page")) == chunk_page
             and (
-                normalize_citation_value(str(citation.get("source", ""))) in chunk_sources
-                or citation_source_name(str(citation.get("source", ""))) in chunk_sources
+                normalize_citation_value(str(citation.get("source", "")))
+                in chunk_sources
+                or citation_source_name(str(citation.get("source", "")))
+                in chunk_sources
             )
             for citation in citations
         )

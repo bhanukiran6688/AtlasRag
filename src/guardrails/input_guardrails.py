@@ -7,7 +7,6 @@ from src.config.settings import settings
 from src.utils.citations import filter_valid_citations
 from src.utils.logger import get_logger
 
-
 logger = get_logger(__name__)
 
 
@@ -117,7 +116,9 @@ class InputGuardrails:
             )
 
         if pii_detected:
-            logger.info("Redacted PII types before processing: %s", ", ".join(pii_detected))
+            logger.info(
+                "Redacted PII types before processing: %s", ", ".join(pii_detected)
+            )
 
         return GuardrailResult(
             original_text=text,
@@ -186,7 +187,9 @@ class OutputGuardrails:
         "not enough information",
     )
 
-    def __init__(self, claim_support_verifier: ClaimSupportVerifier | None = None) -> None:
+    def __init__(
+        self, claim_support_verifier: ClaimSupportVerifier | None = None
+    ) -> None:
         self._claim_support_verifier = claim_support_verifier or ClaimSupportVerifier()
 
     def validate(
@@ -212,9 +215,14 @@ class OutputGuardrails:
         if self._is_insufficient_answer(answer):
             return OutputGuardrailResult(answer=answer, citations=valid_citations)
 
-        claim_error = self._validate_claims(claims=claims, retrieved_chunks=retrieved_chunks)
+        claim_error = self._validate_claims(
+            claims=claims, retrieved_chunks=retrieved_chunks
+        )
         if claim_error:
-            logger.warning("Blocked answer because claim citation enforcement failed: %s", claim_error)
+            logger.warning(
+                "Blocked answer because claim citation enforcement failed: %s",
+                claim_error,
+            )
             return OutputGuardrailResult(
                 answer="I don't have enough information in the provided documents.",
                 citations=[],
@@ -260,12 +268,17 @@ class OutputGuardrails:
             ]
             if not filter_valid_citations(normalized_citations, retrieved_chunks):
                 return f"Claim lacks valid retrieved citation: {text}"
-            if settings.guardrails_enable_claim_support_check and not self._claim_support_verifier.verify(
-                text,
-                normalized_citations,
-                retrieved_chunks,
+            if (
+                settings.guardrails_enable_claim_support_check
+                and not self._claim_support_verifier.verify(
+                    text,
+                    normalized_citations,
+                    retrieved_chunks,
+                )
             ):
-                return f"Claim is not sufficiently supported by its cited context: {text}"
+                return (
+                    f"Claim is not sufficiently supported by its cited context: {text}"
+                )
 
         return None
 
@@ -279,4 +292,6 @@ class OutputGuardrails:
     # Recognize abstention answers that should not require citations.
     def _is_insufficient_answer(self, answer: str) -> bool:
         answer_lower = answer.lower()
-        return any(marker in answer_lower for marker in self._insufficient_answer_markers)
+        return any(
+            marker in answer_lower for marker in self._insufficient_answer_markers
+        )

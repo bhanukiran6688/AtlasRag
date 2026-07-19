@@ -4,6 +4,13 @@
 
 This document explains when and how to reindex your vector store when metadata schemas change in the AtlasRAG system.
 
+**Why this matters:** Vector stores store document embeddings along with their metadata. When you change the metadata schema (add fields, rename fields, change structure), old documents won't have the new metadata. This causes issues with:
+- Metadata filters missing old documents
+- Parent-child retrieval failing on old chunks
+- Inconsistent BM25 indexing if document IDs change
+
+This guide provides procedures to safely reindex your data when metadata schemas evolve.
+
 ## When Reindexing is Required
 
 Reindexing is required when:

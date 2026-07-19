@@ -1,5 +1,9 @@
 import pytest
-from src.utils.metadata_filters import parse_metadata_filter, build_metadata_filter, validate_metadata_filter
+from src.utils.metadata_filters import (
+    parse_metadata_filter,
+    build_metadata_filter,
+    validate_metadata_filter,
+)
 
 
 class TestParseMetadataFilter:
@@ -20,7 +24,9 @@ class TestParseMetadataFilter:
             parse_metadata_filter("")
 
     def test_parse_metadata_filter_with_nested_object(self):
-        result = parse_metadata_filter('{"key1": "value1", "key2": {"nested": "value"}}')
+        result = parse_metadata_filter(
+            '{"key1": "value1", "key2": {"nested": "value"}}'
+        )
         assert result == {"key1": "value1", "key2": {"nested": "value"}}
 
 
@@ -38,7 +44,9 @@ class TestValidateMetadataFilter:
         assert result == {"key": True}
 
     def test_validate_metadata_filter_with_empty_key_raises_error(self):
-        with pytest.raises(ValueError, match="Metadata filter keys must be non-empty strings"):
+        with pytest.raises(
+            ValueError, match="Metadata filter keys must be non-empty strings"
+        ):
             validate_metadata_filter({"": "value"})
 
     def test_validate_metadata_filter_with_whitespace_key_normalizes(self):
@@ -48,27 +56,43 @@ class TestValidateMetadataFilter:
     def test_validate_metadata_filter_with_disallowed_key_raises_error(self):
         allowed_keys = {"allowed_key"}
         with pytest.raises(ValueError, match="Metadata filter key is not allowed"):
-            validate_metadata_filter({"disallowed_key": "value"}, allowed_keys=allowed_keys)
+            validate_metadata_filter(
+                {"disallowed_key": "value"}, allowed_keys=allowed_keys
+            )
 
     def test_validate_metadata_filter_with_allowed_key_succeeds(self):
         allowed_keys = {"allowed_key"}
-        result = validate_metadata_filter({"allowed_key": "value"}, allowed_keys=allowed_keys)
+        result = validate_metadata_filter(
+            {"allowed_key": "value"}, allowed_keys=allowed_keys
+        )
         assert result == {"allowed_key": "value"}
 
     def test_validate_metadata_filter_with_invalid_value_type_raises_error(self):
-        with pytest.raises(ValueError, match="Metadata filter value for 'key' must be a string, number, or boolean"):
+        with pytest.raises(
+            ValueError,
+            match="Metadata filter value for 'key' must be a string, number, or boolean",
+        ):
             validate_metadata_filter({"key": ["list"]})
 
     def test_validate_metadata_filter_with_dict_value_raises_error(self):
-        with pytest.raises(ValueError, match="Metadata filter value for 'key' must be a string, number, or boolean"):
+        with pytest.raises(
+            ValueError,
+            match="Metadata filter value for 'key' must be a string, number, or boolean",
+        ):
             validate_metadata_filter({"key": {"nested": "value"}})
 
     def test_validate_metadata_filter_with_list_value_raises_error(self):
-        with pytest.raises(ValueError, match="Metadata filter value for 'key' must be a string, number, or boolean"):
+        with pytest.raises(
+            ValueError,
+            match="Metadata filter value for 'key' must be a string, number, or boolean",
+        ):
             validate_metadata_filter({"key": [1, 2, 3]})
 
     def test_validate_metadata_filter_with_none_value_raises_error(self):
-        with pytest.raises(ValueError, match="Metadata filter value for 'key' must be a string, number, or boolean"):
+        with pytest.raises(
+            ValueError,
+            match="Metadata filter value for 'key' must be a string, number, or boolean",
+        ):
             validate_metadata_filter({"key": None})
 
     def test_validate_metadata_filter_strips_string_values(self):
@@ -93,16 +117,22 @@ class TestBuildMetadataFilter:
         result = build_metadata_filter(
             source="test.pdf",
             file_type="PDF",
-            custom_metadata={"department": "finance"}
+            custom_metadata={"department": "finance"},
         )
-        assert result == {"source": "test.pdf", "file_type": "pdf", "department": "finance"}
+        assert result == {
+            "source": "test.pdf",
+            "file_type": "pdf",
+            "department": "finance",
+        }
 
     def test_build_metadata_filter_with_empty_strings_returns_none(self):
         result = build_metadata_filter(source="", file_type="", custom_metadata=None)
         assert result is None
 
     def test_build_metadata_filter_with_whitespace_strings_returns_none(self):
-        result = build_metadata_filter(source="  ", file_type="  ", custom_metadata=None)
+        result = build_metadata_filter(
+            source="  ", file_type="  ", custom_metadata=None
+        )
         assert result is None
 
     def test_build_metadata_filter_with_allowed_keys_filters_custom_metadata(self):
@@ -110,14 +140,12 @@ class TestBuildMetadataFilter:
         result = build_metadata_filter(
             source="test.pdf",
             custom_metadata={"department": "finance", "disallowed": "value"},
-            allowed_keys=allowed_keys
+            allowed_keys=allowed_keys,
         )
         assert result == {"source": "test.pdf", "department": "finance"}
 
     def test_build_metadata_filter_without_allowed_keys_includes_all(self):
         result = build_metadata_filter(
-            source="test.pdf",
-            custom_metadata={"any_key": "value"},
-            allowed_keys=None
+            source="test.pdf", custom_metadata={"any_key": "value"}, allowed_keys=None
         )
         assert result == {"source": "test.pdf", "any_key": "value"}

@@ -35,9 +35,15 @@ def filter_valid_citations(
         citation
         for citation in citations
         if (
-            (normalize_citation_value(str(citation.get("source", ""))), normalize_citation_page(citation.get("page")))
+            (
+                normalize_citation_value(str(citation.get("source", ""))),
+                normalize_citation_page(citation.get("page")),
+            )
             in valid_sources
-            or (citation_source_name(str(citation.get("source", ""))), normalize_citation_page(citation.get("page")))
+            or (
+                citation_source_name(str(citation.get("source", ""))),
+                normalize_citation_page(citation.get("page")),
+            )
             in valid_sources
         )
     ]

@@ -64,7 +64,7 @@ class TestInMemoryTTLCache:
         cache.set("key1", "value1")
         cache.set("key2", "value2")
         cache.set("key1", "value1_updated")
-        
+
         # key1 should be at the end (most recently used)
         last_key = list(cache._items.keys())[-1]
         assert last_key == "key1"
@@ -74,7 +74,7 @@ class TestInMemoryTTLCache:
         cache.set("key1", "value1")
         cache.set("key2", "value2")
         cache.get("key1")
-        
+
         # key1 should be at the end (most recently used)
         last_key = list(cache._items.keys())[-1]
         assert last_key == "key1"
@@ -85,7 +85,7 @@ class TestInMemoryTTLCache:
         cache.set("key2", "value2")
         cache.set("key3", "value3")
         cache.set("key4", "value4")
-        
+
         assert cache.get("key1") is None
         assert cache.get("key2") == "value2"
         assert cache.get("key3") == "value3"
@@ -96,7 +96,7 @@ class TestInMemoryTTLCache:
         cache.set("key1", "value1")
         cache.set("key2", "value2")
         cache.set("key3", "value3")
-        
+
         assert cache.get("key1") is None
         assert cache.get("key2") is None
         assert cache.get("key3") == "value3"
@@ -106,21 +106,21 @@ class TestInMemoryTTLCache:
         cache.set("key1", "value1")
         cache.set("key2", "value2")
         cache.clear()
-        
+
         assert cache.get("key1") is None
         assert cache.get("key2") is None
         assert len(cache._items) == 0
 
     def test_cache_handles_different_value_types(self):
         cache = InMemoryTTLCache(max_size=10, ttl_seconds=100)
-        
+
         cache.set("string", "value")
         cache.set("int", 123)
         cache.set("float", 45.67)
         cache.set("bool", True)
         cache.set("list", [1, 2, 3])
         cache.set("dict", {"key": "value"})
-        
+
         assert cache.get("string") == "value"
         assert cache.get("int") == 123
         assert cache.get("float") == 45.67
@@ -132,7 +132,7 @@ class TestInMemoryTTLCache:
         cache = InMemoryTTLCache(max_size=5, ttl_seconds=100)
         for i in range(10):
             cache.set(f"key{i}", f"value{i}")
-        
+
         # Should only keep the last 5 entries
         assert len(cache._items) == 5
         assert cache.get("key5") == "value5"

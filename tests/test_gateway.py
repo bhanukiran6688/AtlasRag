@@ -2,6 +2,7 @@ import pytest
 from typing import Mapping, Any
 from src.llm.base import LLMGateway, LLMResponse, LLMUsage
 
+
 class MockLLMGateway(LLMGateway):
     def __init__(self):
         self.responses = []
@@ -20,13 +21,14 @@ class MockLLMGateway(LLMGateway):
         self.last_prompt = prompt
         if self.responses:
             return self.responses.pop(0)
-        
+
         return LLMResponse(
             content='{"answer": "Mocked answer", "citations": [], "claims": []}',
             model="mock-model",
             latency_ms=10.0,
-            usage=LLMUsage(total_tokens=10, cost_usd=0.001)
+            usage=LLMUsage(total_tokens=10, cost_usd=0.001),
         )
+
 
 @pytest.mark.asyncio
 async def test_mock_gateway():

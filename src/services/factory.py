@@ -9,7 +9,9 @@ from src.vectorstores.base import VectorStoreFactory
 def create_rag_service() -> RAGService:
     """Create the RAG application service with its production dependencies."""
     embedding_generator = EmbeddingGenerator()
-    vector_store = VectorStoreFactory.create(embeddings=embedding_generator.get_embeddings())
+    vector_store = VectorStoreFactory.create(
+        embeddings=embedding_generator.get_embeddings()
+    )
     vector_store.validate_connection()
     llm_gateway = LLMGatewayFactory.create()
     llm_gateway.validate_connection()

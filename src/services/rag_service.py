@@ -14,7 +14,6 @@ from src.services.query_planner import QueryPlanner
 from src.utils.metadata_filters import build_metadata_filter, parse_metadata_filter
 from src.schemas.structured_output import StructuredRAGOutput
 
-
 logger = get_logger(__name__)
 
 
@@ -128,7 +127,9 @@ class RAGService:
                 )
             )
 
-        raise RuntimeError("Use `await aprocess(...)` when already inside an async event loop.")
+        raise RuntimeError(
+            "Use `await aprocess(...)` when already inside an async event loop."
+        )
 
     async def aprocess(
         self,
@@ -152,23 +153,28 @@ class RAGService:
                     retrieved_chunks=[],
                     context="",
                     prompt="",
-                    answer=guardrail_result.blocked_reason or "Request blocked by input guardrails.",
+                    answer=guardrail_result.blocked_reason
+                    or "Request blocked by input guardrails.",
                     sanitized_question=guardrail_result.sanitized_text,
                     is_blocked=True,
                     blocked_reason=guardrail_result.blocked_reason,
                     pii_detected=guardrail_result.pii_detected,
-            )
+                )
 
             sanitized_question = guardrail_result.sanitized_text
             effective_filter = self._build_metadata_filter(metadata_filter)
             initial_retrieved_chunks: list[RetrievalResult] | None = None
             initial_grounding_confidence: float | None = None
-            if settings.query_planning_adaptive_enabled and (use_query_expansion or use_query_decomposition):
+            if settings.query_planning_adaptive_enabled and (
+                use_query_expansion or use_query_decomposition
+            ):
                 initial_retrieved_chunks = self._retrieve_for_queries(
                     queries=[sanitized_question],
                     metadata_filter=effective_filter,
                 )
-                initial_grounding_confidence = self._compute_grounding_confidence(initial_retrieved_chunks)
+                initial_grounding_confidence = self._compute_grounding_confidence(
+                    initial_retrieved_chunks
+                )
 
             retrieval_queries = await self._query_planner.build_queries(
                 sanitized_question,
@@ -176,7 +182,9 @@ class RAGService:
                 use_query_decomposition=use_query_decomposition,
                 retrieval_confidence=initial_grounding_confidence,
             )
-            if initial_retrieved_chunks is not None and retrieval_queries == [sanitized_question]:
+            if initial_retrieved_chunks is not None and retrieval_queries == [
+                sanitized_question
+            ]:
                 retrieved_chunks = initial_retrieved_chunks
             else:
                 retrieved_chunks = self._retrieve_for_queries(
@@ -265,7 +273,20 @@ class RAGService:
             )
 
     # Normalize and bound conversation history before prompt injection.
-    def _normalize_conversation_history(self, conversation_history: list[dict[str, str]] | None) -> list[dict[str, str]]:
+    def _normalize_conversation_history(
+        self, conversation_history: list[dict[str, str]] | None
+    ) -> list[dict[str, str]]:
+        """Normalize conversation history and apply both turn and token limits.
+
+        This method uses a two-stage limiting strategy:
+        1. First limit by turns (conversation_memory_max_turns) as a safety measure
+        2. Then limit by tokens (conversation_memory_max_tokens) for accurate prompt sizing
+
+        Token-based limiting is more accurate than turn-based because:
+        - Different turns can have vastly different lengths
+        - Prompt costs are based on tokens, not turns
+        - This prevents unexpectedly long prompts from exceeding context windows
+        """
         if not conversation_history:
             return []
 
@@ -278,46 +299,60 @@ class RAGService:
                         "content": str(turn.get("content", "")),
                     }
                 )
-        
-        # First limit by turns as a safety measure
-        turn_limited = normalized_history[-settings.conversation_memory_max_turns * 2:]
-        
-        # Then limit by tokens (more accurate for prompt length)
-        token_limited = self._limit_by_tokens(turn_limited, settings.conversation_memory_max_tokens)
-        
+
+        # First limit by turns as a safety measure (prevents unbounded growth)
+        turn_limited = normalized_history[-settings.conversation_memory_max_turns * 2 :]
+
+        # Then limit by tokens (more accurate for prompt length and cost control)
+        token_limited = self._limit_by_tokens(
+            turn_limited, settings.conversation_memory_max_tokens
+        )
+
         return token_limited
 
-    def _limit_by_tokens(self, conversation_history: list[dict[str, str]], max_tokens: int) -> list[dict[str, str]]:
-        """Limit conversation history by estimated token count."""
+    def _limit_by_tokens(
+        self, conversation_history: list[dict[str, str]], max_tokens: int
+    ) -> list[dict[str, str]]:
+        """Limit conversation history by estimated token count.
+
+        This method processes conversation history from most recent to oldest,
+        including turns until adding another turn would exceed the token limit.
+        This ensures the most recent context is preserved while staying within
+        the token budget for the LLM prompt.
+
+        Token estimation uses a simple heuristic (~4 characters per token),
+        which is reasonably accurate for English text. For production use,
+        consider using a proper tokenizer like tiktoken for more accuracy.
+        """
         if not conversation_history:
             return []
-        
+
         # Estimate tokens (rough approximation: ~4 chars per token)
         def estimate_tokens(text: str) -> int:
             return len(text) // 4
-        
+
         # Build history from most recent to oldest, tracking token count
         limited_history: list[dict[str, str]] = []
         total_tokens = 0
-        
+
         # Process in reverse order (most recent first)
         for turn in reversed(conversation_history):
             turn_tokens = estimate_tokens(turn.get("content", ""))
-            
+
             if total_tokens + turn_tokens > max_tokens and limited_history:
                 # Adding this turn would exceed limit, stop here
                 break
-            
+
             limited_history.insert(0, turn)
             total_tokens += turn_tokens
-        
+
         logger.info(
             "Conversation history limited to %d turns (%d estimated tokens, max %d)",
             len(limited_history),
             total_tokens,
             max_tokens,
         )
-        
+
         return limited_history
 
     # Maintain bounded local conversation memory after each RAG answer.
@@ -331,7 +366,7 @@ class RAGService:
         history = self._normalize_conversation_history(conversation_history)
         history.append({"role": "user", "content": question})
         history.append({"role": "assistant", "content": answer})
-        return history[-settings.conversation_memory_max_turns * 2:]
+        return history[-settings.conversation_memory_max_turns * 2 :]
 
     # Retrieve and deduplicate chunks across original, expanded, and decomposed queries.
     def _retrieve_for_queries(
@@ -349,7 +384,9 @@ class RAGService:
                     metadata_filter=metadata_filter,
                 )
             except Exception as exc:
-                raise RetrievalError(f"Retrieval failed for query '{query}': {exc}") from exc
+                raise RetrievalError(
+                    f"Retrieval failed for query '{query}': {exc}"
+                ) from exc
 
             for result in retrieved_results:
                 chunk_key = (
@@ -381,7 +418,9 @@ class RAGService:
         configured_filter: dict[str, Any] = {}
         if settings.retrieval_filter_metadata_json:
             try:
-                configured_filter = parse_metadata_filter(settings.retrieval_filter_metadata_json)
+                configured_filter = parse_metadata_filter(
+                    settings.retrieval_filter_metadata_json
+                )
             except ValueError as exc:
                 logger.warning("Configured metadata filter ignored. error=%s", exc)
 
@@ -409,7 +448,11 @@ class RAGService:
     ) -> RAGResult:
         usage = llm_response.usage
         structured_output = RAGService._parse_structured_output(llm_response.content)
-        answer = structured_output.get("answer") if structured_output else llm_response.content
+        answer = (
+            structured_output.get("answer")
+            if structured_output
+            else llm_response.content
+        )
         citations = RAGService._extract_citations(structured_output)
         claims = RAGService._extract_claims(structured_output)
         output_guardrail_result = self._output_guardrails.validate(
@@ -424,7 +467,10 @@ class RAGService:
             structured_output["answer"] = output_guardrail_result.answer
             structured_output["citations"] = output_guardrail_result.citations
 
-        if output_guardrail_result.is_grounded is False and not output_guardrail_result.answer:
+        if (
+            output_guardrail_result.is_grounded is False
+            and not output_guardrail_result.answer
+        ):
             answer = "I don't have enough information in the provided documents."
         elif output_guardrail_result.is_grounded is False:
             answer = output_guardrail_result.answer
@@ -459,17 +505,28 @@ class RAGService:
 
     # Estimate final answer grounding confidence from retrieved chunk scores.
     @staticmethod
-    def _compute_grounding_confidence(retrieved_chunks: list[RetrievalResult]) -> float | None:
+    def _compute_grounding_confidence(
+        retrieved_chunks: list[RetrievalResult],
+    ) -> float | None:
         if not retrieved_chunks:
             return None
 
         # FEATURE: Grounding confidence signal
-        top_score = max((chunk.distance for chunk in retrieved_chunks if chunk.distance is not None), default=0.0)
+        top_score = max(
+            (
+                chunk.distance
+                for chunk in retrieved_chunks
+                if chunk.distance is not None
+            ),
+            default=0.0,
+        )
         return round(min(1.0, max(0.0, 1.0 - (abs(top_score) / 10.0))), 3)
 
     # Extract citation objects from structured LLM output.
     @staticmethod
-    def _extract_citations(structured_output: dict[str, Any] | None) -> list[dict[str, str]]:
+    def _extract_citations(
+        structured_output: dict[str, Any] | None,
+    ) -> list[dict[str, str]]:
         if not structured_output:
             return []
 
@@ -492,7 +549,9 @@ class RAGService:
 
     # Extract claim-level citation records from structured LLM output.
     @staticmethod
-    def _extract_claims(structured_output: dict[str, Any] | None) -> list[dict[str, object]]:
+    def _extract_claims(
+        structured_output: dict[str, Any] | None,
+    ) -> list[dict[str, object]]:
         if not structured_output:
             return []
 
@@ -520,18 +579,30 @@ class RAGService:
     @staticmethod
     def _with_structured_output_instructions(prompt: str) -> str:
         from src.schemas.structured_output import Citation, Claim
-        
-        schema_example = json.dumps(StructuredRAGOutput(
-            answer="clear answer based only on the provided context",
-            claims=[
-                Claim(
-                    text="single factual statement",
-                    citations=[Citation(source="source filename or path", page="page number or Unknown")]
-                )
-            ],
-            citations=[Citation(source="source filename or path", page="page number or Unknown")]
-        ).to_dict(), indent=2)
-        
+
+        schema_example = json.dumps(
+            StructuredRAGOutput(
+                answer="clear answer based only on the provided context",
+                claims=[
+                    Claim(
+                        text="single factual statement",
+                        citations=[
+                            Citation(
+                                source="source filename or path",
+                                page="page number or Unknown",
+                            )
+                        ],
+                    )
+                ],
+                citations=[
+                    Citation(
+                        source="source filename or path", page="page number or Unknown"
+                    )
+                ],
+            ).to_dict(),
+            indent=2,
+        )
+
         return (
             prompt
             + "\n\nReturn ONLY valid JSON with this shape:\n"

@@ -11,7 +11,9 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 # Centralize all RAG runtime configuration from environment and defaults.
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_file=".env", env_file_encoding="utf-8", extra="ignore"
+    )
 
     chunk_size: int = 800
     chunk_overlap: int = 100
@@ -128,7 +130,9 @@ class Settings(BaseSettings):
             raise RAGConfigurationError(f"Unsupported embedding provider: {provider}")
 
         if provider == "gemini" and not self.gemini_api_keys:
-            raise RAGConfigurationError("Google API key is required when embedding_provider is 'gemini'.")
+            raise RAGConfigurationError(
+                "Google API key is required when embedding_provider is 'gemini'."
+            )
 
     # Validate vector store provider and required connection settings.
     def validate_vector_store_configuration(self) -> None:
@@ -138,17 +142,27 @@ class Settings(BaseSettings):
 
         if provider == "pinecone":
             if not self.pinecone_api_key:
-                raise RAGConfigurationError("pinecone_api_key is required when vector_store is 'pinecone'.")
+                raise RAGConfigurationError(
+                    "pinecone_api_key is required when vector_store is 'pinecone'."
+                )
             if not self.pinecone_index.strip():
-                raise RAGConfigurationError("pinecone_index must not be empty when vector_store is 'pinecone'.")
+                raise RAGConfigurationError(
+                    "pinecone_index must not be empty when vector_store is 'pinecone'."
+                )
 
     # Validate LLM gateway model and provider credentials before startup.
     def validate_llm_configuration(self) -> None:
         if not self.llm_primary_model.strip():
             raise RAGConfigurationError("llm_primary_model must not be empty.")
 
-        if not self.gemini_api_keys and not self.groq_api_key and not self.cerebras_api_key:
-            raise RAGConfigurationError("At least one LLM API key must be configured for startup.")
+        if (
+            not self.gemini_api_keys
+            and not self.groq_api_key
+            and not self.cerebras_api_key
+        ):
+            raise RAGConfigurationError(
+                "At least one LLM API key must be configured for startup."
+            )
 
     # Run all startup checks required for the RAG application to boot safely.
     def validate_startup_configuration(self) -> None:

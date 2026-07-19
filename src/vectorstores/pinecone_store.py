@@ -15,7 +15,7 @@ class PineconeStore(VectorStore):
         self._index = PineconeVectorStore(
             index_name=settings.pinecone_index,
             embedding=embeddings,
-            pinecone_api_key=settings.pinecone_api_key
+            pinecone_api_key=settings.pinecone_api_key,
         )
 
     @property
@@ -42,14 +42,13 @@ class PineconeStore(VectorStore):
         try:
             self._index.delete(ids=document_ids)
         except Exception as exc:
-            raise VectorStoreError(f"Failed to delete Pinecone documents: {type(exc).__name__}") from exc
+            raise VectorStoreError(
+                f"Failed to delete Pinecone documents: {type(exc).__name__}"
+            ) from exc
 
     # Add documents to Pinecone using stable chunk IDs when available.
     def add_documents(self, documents):
-        ids = [
-            document.metadata.get("chunk_id")
-            for document in documents
-        ]
+        ids = [document.metadata.get("chunk_id") for document in documents]
         try:
             if all(ids):
                 self._index.add_documents(documents, ids=ids)
@@ -57,7 +56,9 @@ class PineconeStore(VectorStore):
 
             self._index.add_documents(documents)
         except Exception as exc:
-            raise VectorStoreError(f"Failed to add documents to Pinecone: {type(exc).__name__}") from exc
+            raise VectorStoreError(
+                f"Failed to add documents to Pinecone: {type(exc).__name__}"
+            ) from exc
 
     # Run dense similarity search in Pinecone with optional metadata filters.
     def similarity_search_with_score(
@@ -73,7 +74,9 @@ class PineconeStore(VectorStore):
                 filter=metadata_filter,
             )
         except Exception as exc:
-            raise VectorStoreError(f"Pinecone similarity search failed: {type(exc).__name__}") from exc
+            raise VectorStoreError(
+                f"Pinecone similarity search failed: {type(exc).__name__}"
+            ) from exc
 
     # Run Pinecone MMR retrieval for diverse context selection.
     def max_marginal_relevance_search(
@@ -93,4 +96,6 @@ class PineconeStore(VectorStore):
                 filter=metadata_filter,
             )
         except Exception as exc:
-            raise VectorStoreError(f"Pinecone MMR search failed: {type(exc).__name__}") from exc
+            raise VectorStoreError(
+                f"Pinecone MMR search failed: {type(exc).__name__}"
+            ) from exc

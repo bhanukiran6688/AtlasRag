@@ -76,6 +76,7 @@ class VectorStoreFactory:
     def create(embeddings: Embeddings) -> VectorStore:
         from src.vectorstores.chroma_store import ChromaStore
         from src.vectorstores.pinecone_store import PineconeStore
+
         settings.validate_vector_store_configuration()
 
         provider = settings.vector_store.lower()

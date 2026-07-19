@@ -18,17 +18,11 @@ class HuggingFaceEmbeddingAdapter:
 
     # Embed document chunks into normalized dense vectors for vector search.
     def embed_documents(self, texts: list[str]) -> list[list[float]]:
-        return self.model.encode(
-            texts,
-            normalize_embeddings=True
-        ).tolist()
+        return self.model.encode(texts, normalize_embeddings=True).tolist()
 
     # Embed user queries into the same vector space as indexed chunks.
     def embed_query(self, text: str) -> list[float]:
-        return self.model.encode(
-            text,
-            normalize_embeddings=True
-        ).tolist()
+        return self.model.encode(text, normalize_embeddings=True).tolist()
 
 
 class EmbeddingGenerator:
@@ -49,9 +43,7 @@ class EmbeddingGenerator:
             self._embeddings = GoogleGenerativeAIEmbeddings(model=model)
 
         else:
-            raise ValueError(
-                f"Unsupported embedding provider: {provider}"
-            )
+            raise ValueError(f"Unsupported embedding provider: {provider}")
 
         logger.info(
             "Initialized %s embedding model: %s",

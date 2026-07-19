@@ -16,4 +16,3 @@ class VectorStoreError(RetrievalError):
 
 class GatewayError(RuntimeError):
     """Raised when the LLM gateway cannot complete a request."""
-

@@ -15,7 +15,7 @@ class DocumentCleaner:
     """
 
     @classmethod
-    def clean_documents(cls,documents: list[Document]) -> list[Document]:
+    def clean_documents(cls, documents: list[Document]) -> list[Document]:
         """
         Clean all loaded documents.
         """
@@ -24,12 +24,15 @@ class DocumentCleaner:
         for document in documents:
             cleaned_documents.append(
                 Document(
-	                page_content=cls._clean_text(document.page_content),
-                    metadata=document.metadata
+                    page_content=cls._clean_text(document.page_content),
+                    metadata=document.metadata,
                 )
             )
 
-        logger.info("Cleaned %d document(s).",len(cleaned_documents),)
+        logger.info(
+            "Cleaned %d document(s).",
+            len(cleaned_documents),
+        )
         return cleaned_documents
 
     @staticmethod
@@ -75,7 +78,10 @@ class DocumentLoader:
         from langchain_community.document_loaders import TextLoader
 
         logger.info("Loading Text File: %s", file_path)
-        return TextLoader(str(file_path), encoding="utf-8",).load()
+        return TextLoader(
+            str(file_path),
+            encoding="utf-8",
+        ).load()
 
     # Load Markdown files while preserving document metadata.
     @staticmethod
@@ -89,6 +95,7 @@ class DocumentLoader:
     @staticmethod
     def load_docx(file_path: str | Path) -> list[Document]:
         from langchain_community.document_loaders import Docx2txtLoader
+
         logger.info("Loading Word Document: %s", file_path)
         return Docx2txtLoader(str(file_path)).load()  # type: ignore
 
@@ -104,12 +111,9 @@ class DocumentLoader:
     @staticmethod
     def load_json(file_path: str | Path) -> list[Document]:
         from langchain_community.document_loaders import JSONLoader
+
         logger.info("Loading JSON File: %s", file_path)
-        return JSONLoader(
-            str(file_path),
-            jq_schema=".",
-            text_content=False
-        ).load()
+        return JSONLoader(str(file_path), jq_schema=".", text_content=False).load()
 
     @classmethod
     def load_file(cls, file_path: str | Path) -> list[Document]:
@@ -123,9 +127,7 @@ class DocumentLoader:
         loader = cls._LOADERS.get(file_path.suffix.lower())
 
         if loader is None:
-            raise ValueError(
-                f"Unsupported file extension: {file_path.suffix}"
-            )
+            raise ValueError(f"Unsupported file extension: {file_path.suffix}")
 
         try:
             return loader(file_path)

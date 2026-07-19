@@ -14,7 +14,6 @@ from src.loaders.document_loader import DocumentCleaner, DocumentLoader
 from src.vectorstores.base import VectorStore, VectorStoreFactory
 from src.retrievers.bm25_index import BM25Index
 
-
 MANIFEST_PATH = settings.data_dir / "index_manifest.json"
 
 
@@ -39,9 +38,19 @@ class IndexManifest:
 
     def has_current_file(self, file_path: Path, content_hash: str) -> bool:
         indexed_file = self._files.get(self._manifest_key(file_path))
-        return indexed_file is not None and not indexed_file.deleted and indexed_file.content_hash == content_hash
+        return (
+            indexed_file is not None
+            and not indexed_file.deleted
+            and indexed_file.content_hash == content_hash
+        )
 
-    def record_file(self, file_path: Path, content_hash: str, chunks_indexed: int, chunk_ids: list[str] | None = None) -> None:
+    def record_file(
+        self,
+        file_path: Path,
+        content_hash: str,
+        chunks_indexed: int,
+        chunk_ids: list[str] | None = None,
+    ) -> None:
         self._files[self._manifest_key(file_path)] = IndexedFile(
             path=str(file_path),
             content_hash=content_hash,
@@ -148,7 +157,9 @@ def add_chunk_identity(chunks, file_path: Path, content_hash: str) -> list[str]:
 
 # FEATURE: Incremental indexing support
 # Keep track of whether a file was previously indexed so unchanged files can be skipped quickly.
-def should_index_file(file_path: Path, manifest: IndexManifest, content_hash: str) -> bool:
+def should_index_file(
+    file_path: Path, manifest: IndexManifest, content_hash: str
+) -> bool:
     return not manifest.has_current_file(file_path=file_path, content_hash=content_hash)
 
 
@@ -161,7 +172,7 @@ def process_and_index_file(
 ) -> int:
     """
     Load, clean, split, identify, and index a single document.
-    
+
     RAG Concept: Multi-Index Ingestion
     - Documents are indexed in both vector store (for semantic search) and BM25 index (for lexical search)
     - This enables true hybrid search where both semantic and lexical retrieval work over the full corpus
@@ -170,7 +181,9 @@ def process_and_index_file(
 
     try:
         content_hash = calculate_file_hash(file_path)
-        if not should_index_file(file_path=file_path, manifest=manifest, content_hash=content_hash):
+        if not should_index_file(
+            file_path=file_path, manifest=manifest, content_hash=content_hash
+        ):
             print(f"Skipping unchanged file: {file_path.name}")
             return 0
 
@@ -184,12 +197,16 @@ def process_and_index_file(
                     bm25_index.delete_document(chunk_id)
 
         documents = DocumentCleaner.clean_documents(DocumentLoader.load_file(file_path))
-        chunks = splitter.split_documents(documents=documents, file_type=file_path.suffix.lstrip("."))
-        chunk_ids = add_chunk_identity(chunks=chunks, file_path=file_path, content_hash=content_hash)
-        
+        chunks = splitter.split_documents(
+            documents=documents, file_type=file_path.suffix.lstrip(".")
+        )
+        chunk_ids = add_chunk_identity(
+            chunks=chunks, file_path=file_path, content_hash=content_hash
+        )
+
         # Index in vector store for semantic search
         vector_store.add_documents(chunks)
-        
+
         # RAG Concept: BM25 Indexing for Lexical Search
         # Index each chunk in the BM25 index for full corpus lexical search
         # This enables hybrid search where BM25 can find documents that dense search might miss
@@ -200,12 +217,17 @@ def process_and_index_file(
                     bm25_index.add_document(
                         doc_id=chunk_id,
                         content=chunk.page_content,
-                        metadata=chunk.metadata
+                        metadata=chunk.metadata,
                     )
             # Persist BM25 index after each file for crash recovery
             bm25_index.save_index()
-        
-        manifest.record_file(file_path=file_path, content_hash=content_hash, chunks_indexed=len(chunks), chunk_ids=chunk_ids)
+
+        manifest.record_file(
+            file_path=file_path,
+            content_hash=content_hash,
+            chunks_indexed=len(chunks),
+            chunk_ids=chunk_ids,
+        )
         print(f"Indexed {len(chunks)} chunks from {file_path.name}")
         return len(chunks)
 
@@ -227,11 +249,17 @@ def main() -> None:
     print("=" * 70)
 
     if not settings.documents_dir.exists():
-        raise IngestionError(f"Documents directory does not exist: {settings.documents_dir}")
+        raise IngestionError(
+            f"Documents directory does not exist: {settings.documents_dir}"
+        )
 
-    splitter = DocumentSplitter(enable_parent_child=settings.enable_parent_child_retrieval)
+    splitter = DocumentSplitter(
+        enable_parent_child=settings.enable_parent_child_retrieval
+    )
     embedding_generator = EmbeddingGenerator()
-    vector_store = VectorStoreFactory.create(embeddings=embedding_generator.get_embeddings())
+    vector_store = VectorStoreFactory.create(
+        embeddings=embedding_generator.get_embeddings()
+    )
     manifest = IndexManifest(MANIFEST_PATH)
     files = sorted(file for file in settings.documents_dir.iterdir() if file.is_file())
     manifest.remove_missing_files({str(file.resolve()) for file in files})

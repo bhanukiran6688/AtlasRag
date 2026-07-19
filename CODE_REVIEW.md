@@ -90,11 +90,6 @@ The repository has a strong modular RAG architecture for a portfolio project: in
 
 ## Retrieval Weaknesses
 
-### Score semantics vary by strategy
-- Issue: similarity distance, MMR rank, BM25 negative score, and rerank score differ.
-- Impact: metrics can confuse users.
-- Recommendation: expose separate fields or normalize scores per strategy.
-
 ## Latency and Cost Opportunities
 
 1. Disable reranking unless high accuracy is required.

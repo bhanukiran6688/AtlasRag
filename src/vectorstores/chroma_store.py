@@ -7,7 +7,6 @@ from src.config.settings import settings
 from src.utils.exceptions import VectorStoreError
 from src.vectorstores.base import VectorStore
 
-
 logger = get_logger(__name__)
 
 
@@ -16,7 +15,9 @@ class ChromaStore(VectorStore):
     Handles interactions with the Chroma vector database.
     """
 
-    def __init__(self, embeddings: Embeddings, collection_name: str = "documents") -> None:
+    def __init__(
+        self, embeddings: Embeddings, collection_name: str = "documents"
+    ) -> None:
         # Lazy import to reduce startup time.
         from langchain_chroma import Chroma
 
@@ -24,10 +25,10 @@ class ChromaStore(VectorStore):
         self._vector_store = Chroma(
             collection_name=collection_name,
             embedding_function=embeddings,
-            persist_directory=str(settings.chroma_dir)
+            persist_directory=str(settings.chroma_dir),
         )
 
-        logger.info("Initialized Chroma collection: %s",collection_name)
+        logger.info("Initialized Chroma collection: %s", collection_name)
 
     @property
     def name(self) -> str:
@@ -49,7 +50,9 @@ class ChromaStore(VectorStore):
         try:
             self._vector_store.delete(ids=document_ids)
         except Exception as exc:
-            raise VectorStoreError(f"Failed to delete Chroma documents: {type(exc).__name__}") from exc
+            raise VectorStoreError(
+                f"Failed to delete Chroma documents: {type(exc).__name__}"
+            ) from exc
 
     def add_documents(self, documents: list[Document]) -> None:
         """
@@ -65,11 +68,13 @@ class ChromaStore(VectorStore):
         try:
             self._vector_store.add_documents(documents=documents, ids=ids)
         except Exception as exc:
-            raise VectorStoreError(f"Failed to add documents to Chroma: {type(exc).__name__}") from exc
+            raise VectorStoreError(
+                f"Failed to add documents to Chroma: {type(exc).__name__}"
+            ) from exc
         logger.info(
             "Indexed %d chunks from %s.",
             len(documents),
-            documents[0].metadata.get("source", "Unknown")
+            documents[0].metadata.get("source", "Unknown"),
         )
 
     # Run dense similarity search in Chroma with optional metadata filters.
@@ -86,7 +91,9 @@ class ChromaStore(VectorStore):
                 filter=metadata_filter,
             )
         except Exception as exc:
-            raise VectorStoreError(f"Chroma similarity search failed: {type(exc).__name__}") from exc
+            raise VectorStoreError(
+                f"Chroma similarity search failed: {type(exc).__name__}"
+            ) from exc
 
     # Run Chroma MMR retrieval for diverse context selection.
     def max_marginal_relevance_search(
@@ -106,4 +113,6 @@ class ChromaStore(VectorStore):
                 filter=metadata_filter,
             )
         except Exception as exc:
-            raise VectorStoreError(f"Chroma MMR search failed: {type(exc).__name__}") from exc
+            raise VectorStoreError(
+                f"Chroma MMR search failed: {type(exc).__name__}"
+            ) from exc

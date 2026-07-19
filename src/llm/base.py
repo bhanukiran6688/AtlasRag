@@ -12,7 +12,6 @@ from src.config.settings import settings
 from src.utils.exceptions import GatewayError, RAGConfigurationError
 from src.utils.logger import get_logger
 
-
 logger = get_logger(__name__)
 
 
@@ -70,8 +69,14 @@ class LiteLLMGateway(LLMGateway):
 
     # Validate that at least one configured LLM provider can serve RAG answers.
     def validate_connection(self) -> None:
-        if not settings.gemini_api_keys and not settings.groq_api_key and not settings.cerebras_api_key:
-            raise RAGConfigurationError("No LLM API keys are configured for the gateway.")
+        if (
+            not settings.gemini_api_keys
+            and not settings.groq_api_key
+            and not settings.cerebras_api_key
+        ):
+            raise RAGConfigurationError(
+                "No LLM API keys are configured for the gateway."
+            )
 
     # Initialize LiteLLM routing, response caching, and local rate-limit state.
     def __init__(self) -> None:
@@ -93,7 +98,9 @@ class LiteLLMGateway(LLMGateway):
     ) -> LLMResponse:
         route = self._classify_route(routing_text or prompt)
         model = self._model_for_route(route)
-        request_id = hashlib.sha256(f"{time.time_ns()}:{prompt[:120]}".encode("utf-8")).hexdigest()[:12]
+        request_id = hashlib.sha256(
+            f"{time.time_ns()}:{prompt[:120]}".encode("utf-8")
+        ).hexdigest()[:12]
         payload: dict[str, Any] = {
             "model": model,
             "messages": [{"role": "user", "content": prompt}],
@@ -210,9 +217,11 @@ class LiteLLMGateway(LLMGateway):
             ) from exc
 
         model_list = self._build_model_list()
-        fallbacks = [
-            {settings.llm_primary_model: settings.fallback_model_names}
-        ] if settings.fallback_model_names else []
+        fallbacks = (
+            [{settings.llm_primary_model: settings.fallback_model_names}]
+            if settings.fallback_model_names
+            else []
+        )
 
         return Router(
             model_list=model_list,
@@ -376,14 +385,22 @@ class LiteLLMGateway(LLMGateway):
     # Estimate prompt cost before making a provider call.
     def _budget_error(self, prompt: str) -> str | None:
         estimated_tokens = self._estimate_tokens(prompt)
-        if settings.llm_max_estimated_prompt_tokens > 0 and estimated_tokens > settings.llm_max_estimated_prompt_tokens:
+        if (
+            settings.llm_max_estimated_prompt_tokens > 0
+            and estimated_tokens > settings.llm_max_estimated_prompt_tokens
+        ):
             return (
                 "LLM prompt budget exceeded. "
                 f"estimated_tokens={estimated_tokens} limit={settings.llm_max_estimated_prompt_tokens}"
             )
 
-        if settings.llm_max_estimated_cost_usd_per_request > 0 and settings.llm_estimated_cost_per_1k_tokens > 0:
-            estimated_cost = (estimated_tokens / 1000) * settings.llm_estimated_cost_per_1k_tokens
+        if (
+            settings.llm_max_estimated_cost_usd_per_request > 0
+            and settings.llm_estimated_cost_per_1k_tokens > 0
+        ):
+            estimated_cost = (
+                estimated_tokens / 1000
+            ) * settings.llm_estimated_cost_per_1k_tokens
             if estimated_cost > settings.llm_max_estimated_cost_usd_per_request:
                 return (
                     "LLM cost budget exceeded. "

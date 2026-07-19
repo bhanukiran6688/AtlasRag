@@ -1,3 +1,11 @@
+"""Query planning for RAG retrieval with optional expansion and decomposition.
+
+This module handles intelligent query transformation to improve retrieval quality:
+- Query expansion: generates alternative phrasings of the same question
+- Query decomposition: breaks complex questions into sub-questions
+- Caching: reduces LLM calls by caching query transformation results
+"""
+
 import hashlib
 import json
 import re
@@ -7,18 +15,23 @@ from src.config.settings import settings
 from src.llm.base import LLMGateway
 from src.utils.logger import get_logger
 
-
 logger = get_logger(__name__)
 
 
 class QueryPlanner:
-    """Builds optional expansion and decomposition queries for retrieval with caching."""
+    """Builds optional expansion and decomposition queries for retrieval with caching.
+
+    The planner uses LLM-based query transformation when enabled, with fallback to
+    heuristic methods. Caching reduces LLM costs and latency for repeated queries.
+    """
 
     def __init__(self, llm_gateway: LLMGateway) -> None:
         self._llm_gateway = llm_gateway
+        # In-memory caches for query transformation results
+        # Key: MD5 hash of normalized question, Value: list of transformed queries
         self._expansion_cache: dict[str, list[str]] = {}
         self._decomposition_cache: dict[str, list[str]] = {}
-        self._cache_max_size = 100
+        self._cache_max_size = 100  # Maximum entries per cache (FIFO eviction)
 
     async def build_queries(
         self,
@@ -29,9 +42,15 @@ class QueryPlanner:
         retrieval_confidence: float | None = None,
     ) -> list[str]:
         queries = [question]
-        use_query_expansion = use_query_expansion and self._should_expand(question, retrieval_confidence)
-        use_query_decomposition = use_query_decomposition and self._should_decompose(question, retrieval_confidence)
-        planning_calls_remaining = max(settings.cost_optimization_max_query_planning_calls, 0)
+        use_query_expansion = use_query_expansion and self._should_expand(
+            question, retrieval_confidence
+        )
+        use_query_decomposition = use_query_decomposition and self._should_decompose(
+            question, retrieval_confidence
+        )
+        planning_calls_remaining = max(
+            settings.cost_optimization_max_query_planning_calls, 0
+        )
 
         if use_query_expansion:
             expanded_queries = []
@@ -51,18 +70,28 @@ class QueryPlanner:
     def _should_expand(self, question: str, retrieval_confidence: float | None) -> bool:
         if not settings.query_planning_adaptive_enabled:
             return True
-        return self._is_low_confidence(retrieval_confidence) or len(question.split()) >= settings.query_planning_min_words_for_expansion
+        return (
+            self._is_low_confidence(retrieval_confidence)
+            or len(question.split()) >= settings.query_planning_min_words_for_expansion
+        )
 
-    def _should_decompose(self, question: str, retrieval_confidence: float | None) -> bool:
+    def _should_decompose(
+        self, question: str, retrieval_confidence: float | None
+    ) -> bool:
         if not settings.query_planning_adaptive_enabled:
             return True
         has_multiple_parts = bool(
-            re.search(r"\b(and|or|versus|vs|compare|difference|steps)\b", question, re.IGNORECASE)
+            re.search(
+                r"\b(and|or|versus|vs|compare|difference|steps)\b",
+                question,
+                re.IGNORECASE,
+            )
         )
         return (
             self._is_low_confidence(retrieval_confidence)
             or has_multiple_parts
-            or len(question.split()) >= settings.query_planning_min_words_for_decomposition
+            or len(question.split())
+            >= settings.query_planning_min_words_for_decomposition
         )
 
     @staticmethod
@@ -73,49 +102,66 @@ class QueryPlanner:
         )
 
     async def _generate_variants_cached(self, question: str) -> list[str]:
-        """Generate query variants with caching to reduce LLM calls."""
+        """Generate query variants with caching to reduce LLM calls.
+
+        This method checks the cache first before making an LLM call. If the question
+        has been processed before, it returns the cached variants immediately.
+        Otherwise, it generates new variants and caches them for future use.
+
+        Cache eviction is FIFO (First-In-First-Out) to keep memory usage bounded.
+        """
         cache_key = self._get_cache_key(question)
-        
+
         if cache_key in self._expansion_cache:
             logger.info("Query expansion cache hit for: %s", question[:50])
             return self._expansion_cache[cache_key]
-        
+
         variants = await self._generate_variants(question)
-        
-        # Cache the result
+
+        # Cache the result with FIFO eviction if cache is full
         if len(self._expansion_cache) >= self._cache_max_size:
             # Remove oldest entry (simple FIFO)
             oldest_key = next(iter(self._expansion_cache))
             del self._expansion_cache[oldest_key]
-        
+
         self._expansion_cache[cache_key] = variants
         logger.info("Cached query expansion results for: %s", question[:50])
-        
+
         return variants
 
     async def _generate_subquestions_cached(self, question: str) -> list[str]:
-        """Generate subquestions with caching to reduce LLM calls."""
+        """Generate subquestions with caching to reduce LLM calls.
+
+        Similar to _generate_variants_cached, this method caches decomposition results
+        to avoid repeated LLM calls for the same question. This is especially useful
+        in conversational scenarios where users might ask similar questions.
+        """
         cache_key = self._get_cache_key(question)
-        
+
         if cache_key in self._decomposition_cache:
             logger.info("Query decomposition cache hit for: %s", question[:50])
             return self._decomposition_cache[cache_key]
-        
+
         subquestions = await self._generate_subquestions(question)
-        
-        # Cache the result
+
+        # Cache the result with FIFO eviction if cache is full
         if len(self._decomposition_cache) >= self._cache_max_size:
             # Remove oldest entry (simple FIFO)
             oldest_key = next(iter(self._decomposition_cache))
             del self._decomposition_cache[oldest_key]
-        
+
         self._decomposition_cache[cache_key] = subquestions
         logger.info("Cached query decomposition results for: %s", question[:50])
-        
+
         return subquestions
 
     def _get_cache_key(self, question: str) -> str:
-        """Generate a cache key from the question."""
+        """Generate a cache key from the question.
+
+        The key is an MD5 hash of the normalized question (lowercased, whitespace collapsed).
+        This ensures that semantically identical questions (ignoring case and extra spaces)
+        hit the same cache entry.
+        """
         normalized = " ".join(question.lower().split())
         return hashlib.md5(normalized.encode()).hexdigest()
 
@@ -173,27 +219,65 @@ class QueryPlanner:
         if not normalized_question:
             return []
         keywords = self._extract_keywords(normalized_question)
-        variants = [normalized_question, f"{normalized_question} details", f"{normalized_question} examples"]
+        variants = [
+            normalized_question,
+            f"{normalized_question} details",
+            f"{normalized_question} examples",
+        ]
         if keywords:
             variants.extend((" ".join(keywords), f"{keywords[0]} {keywords[-1]}"))
-        return [variant for variant in variants if variant][:settings.query_expansion_max_variants]
+        return [variant for variant in variants if variant][
+            : settings.query_expansion_max_variants
+        ]
 
     def _heuristic_subquestions(self, question: str) -> list[str]:
         normalized_question = re.sub(r"\s+", " ", question).strip()
         if not normalized_question:
             return []
-        parts = [part.strip() for part in re.split(r"\b(and|or|but)\b", normalized_question, flags=re.IGNORECASE) if part.strip()]
+        parts = [
+            part.strip()
+            for part in re.split(
+                r"\b(and|or|but)\b", normalized_question, flags=re.IGNORECASE
+            )
+            if part.strip()
+        ]
         if len(parts) <= 1:
             keywords = self._extract_keywords(normalized_question)
             return [f"What is {keywords[0]}?"] if keywords else []
         subquestions = [part for part in parts if len(part.split()) <= 8]
-        return subquestions[:settings.query_decomposition_max_subquestions] or [normalized_question]
+        return subquestions[: settings.query_decomposition_max_subquestions] or [
+            normalized_question
+        ]
 
     @staticmethod
     def _extract_keywords(question: str) -> list[str]:
         cleaned_question = re.sub(r"[^a-zA-Z0-9\s]", " ", question).lower()
-        stop_words = {"the", "a", "an", "is", "what", "how", "why", "who", "when", "where", "can", "does", "do", "you", "your", "for", "to", "of", "and", "or", "but"}
-        return [token for token in cleaned_question.split() if token not in stop_words][:4]
+        stop_words = {
+            "the",
+            "a",
+            "an",
+            "is",
+            "what",
+            "how",
+            "why",
+            "who",
+            "when",
+            "where",
+            "can",
+            "does",
+            "do",
+            "you",
+            "your",
+            "for",
+            "to",
+            "of",
+            "and",
+            "or",
+            "but",
+        }
+        return [token for token in cleaned_question.split() if token not in stop_words][
+            :4
+        ]
 
     @staticmethod
     def _deduplicate(queries: list[str]) -> list[str]:
@@ -213,4 +297,8 @@ class QueryPlanner:
         except json.JSONDecodeError:
             return []
         values = parsed.get(key, []) if isinstance(parsed, dict) else []
-        return [str(value).strip() for value in values if str(value).strip()][:limit] if isinstance(values, list) else []
+        return (
+            [str(value).strip() for value in values if str(value).strip()][:limit]
+            if isinstance(values, list)
+            else []
+        )

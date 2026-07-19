@@ -31,7 +31,9 @@ class TestDocumentCleaner:
         assert "word1 word2 word3" in result[0].page_content
 
     def test_clean_documents_preserves_metadata(self):
-        documents = [Document(page_content="content", metadata={"source": "test.pdf", "page": 1})]
+        documents = [
+            Document(page_content="content", metadata={"source": "test.pdf", "page": 1})
+        ]
         result = DocumentCleaner.clean_documents(documents)
         assert result[0].metadata["source"] == "test.pdf"
         assert result[0].metadata["page"] == 1
@@ -41,12 +43,21 @@ class TestDocumentLoader:
     def test_load_file_raises_error_for_unsupported_extension(self, tmp_path):
         unsupported_file = tmp_path / "test.xyz"
         unsupported_file.write_text("content")
-        
+
         with pytest.raises(ValueError, match="Unsupported file extension"):
             DocumentLoader.load_file(unsupported_file)
 
     def test_loaders_dict_contains_all_supported_formats(self):
-        expected_extensions = {".pdf", ".txt", ".text", ".md", ".markdown", ".docx", ".csv", ".json"}
+        expected_extensions = {
+            ".pdf",
+            ".txt",
+            ".text",
+            ".md",
+            ".markdown",
+            ".docx",
+            ".csv",
+            ".json",
+        }
         actual_extensions = set(DocumentLoader._LOADERS.keys())
         assert actual_extensions == expected_extensions
 
@@ -71,13 +82,13 @@ class TestDocumentLoader:
     def test_load_file_with_path_string(self, tmp_path):
         text_file = tmp_path / "test.txt"
         text_file.write_text("test content")
-        
+
         with pytest.raises(ValueError, match="Unsupported file extension"):
             DocumentLoader.load_file(str(text_file).replace(".txt", ".xyz"))
 
     def test_load_file_with_path_object(self, tmp_path):
         text_file = tmp_path / "test.txt"
         text_file.write_text("test content")
-        
+
         with pytest.raises(ValueError, match="Unsupported file extension"):
             DocumentLoader.load_file(text_file.with_suffix(".xyz"))

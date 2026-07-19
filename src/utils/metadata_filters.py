@@ -3,7 +3,6 @@ from typing import Any
 
 from src.utils.logger import get_logger
 
-
 logger = get_logger(__name__)
 
 
@@ -33,7 +32,9 @@ def build_metadata_filter(
         metadata_filter["file_type"] = file_type.strip().lower()
     if custom_metadata:
         metadata_filter.update(custom_metadata)
-    validated_filter = validate_metadata_filter(metadata_filter, allowed_keys=allowed_keys)
+    validated_filter = validate_metadata_filter(
+        metadata_filter, allowed_keys=allowed_keys
+    )
     return validated_filter or None
 
 
@@ -51,6 +52,10 @@ def validate_metadata_filter(
         if allowed_keys and normalized_key not in allowed_keys:
             raise ValueError(f"Metadata filter key is not allowed: {normalized_key}")
         if not isinstance(value, (str, int, float, bool)):
-            raise ValueError(f"Metadata filter value for '{normalized_key}' must be a string, number, or boolean.")
-        validated_filter[normalized_key] = value.strip() if isinstance(value, str) else value
+            raise ValueError(
+                f"Metadata filter value for '{normalized_key}' must be a string, number, or boolean."
+            )
+        validated_filter[normalized_key] = (
+            value.strip() if isinstance(value, str) else value
+        )
     return validated_filter
