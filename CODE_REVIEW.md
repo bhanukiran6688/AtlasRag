@@ -83,12 +83,6 @@ The repository has a strong modular RAG architecture for a portfolio project: in
 
 ## Prompt Engineering Issues
 
-### Structured output prompt is appended manually
-- File: `src/services/rag_service.py`
-- Issue: schema is string-built.
-- Impact: fragile as schema grows.
-- Recommendation: use a Pydantic schema or structured-output helper.
-
 ### Citation instruction may conflict with abstention
 - Issue: all factual statements require claims, but abstention answers do not.
 - Impact: handled by output guardrail markers, but worth testing.
@@ -96,36 +90,16 @@ The repository has a strong modular RAG architecture for a portfolio project: in
 
 ## Retrieval Weaknesses
 
-### BM25 tokenization is simple
-- File: `src/retrievers/retriever.py`
-- Issue: no stemming, stopword filtering, field boosts, or corpus IDF.
-- Impact: weaker lexical retrieval.
-- Recommendation: use `rank_bm25` or OpenSearch for production hybrid search.
-
 ### Score semantics vary by strategy
 - Issue: similarity distance, MMR rank, BM25 negative score, and rerank score differ.
 - Impact: metrics can confuse users.
 - Recommendation: expose separate fields or normalize scores per strategy.
 
-### Metadata consistency depends on reindexing
-- Issue: old vectors may lack newly added metadata keys.
-- Impact: filters can miss old documents.
-- Recommendation: document reindex requirements after metadata schema changes.
-
 ## Latency and Cost Opportunities
 
 1. Disable reranking unless high accuracy is required.
-2. Cache query expansion/decomposition outputs.
-3. Add semantic cache for similar questions.
-4. Add adaptive retrieval strategy selection.
-5. Add model routing based on answer complexity.
-6. Batch embedding during ingestion.
-7. Tune reranker batch size per deployment target.
-8. Limit conversation history by tokens, not only turns.
-9. Track per-request cost in a local metrics file or dashboard.
-10. Add offline evaluation before enabling expensive retrieval settings.
-
-## Recommended Fix Order
-
-1. Split query planning from `RAGService`.
-2. Add full corpus BM25.
+2. Track per-request cost in a local metrics file or dashboard.
+3. Add adaptive retrieval strategy selection.
+4. Add model routing based on answer complexity.
+5. Batch embedding during ingestion.
+6. Tune reranker batch size per deployment target.

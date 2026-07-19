@@ -12,6 +12,15 @@ from src.utils.logger import get_logger
 from src.vectorstores.base import VectorStore
 from src.retrievers.bm25_index import BM25Index
 
+# Import NLTK for improved tokenization
+try:
+    import nltk
+    from nltk.stem import PorterStemmer
+    from nltk.corpus import stopwords
+    NLTK_AVAILABLE = True
+except ImportError:
+    NLTK_AVAILABLE = False
+
 
 logger = get_logger(__name__)
 
@@ -27,6 +36,7 @@ class RetrievalResult:
     distance: float
     retrieval_strategy: str = "similarity"
     rerank_score: float | None = None
+    normalized_score: float | None = None
 
     @property
     def source(self) -> str:
@@ -65,6 +75,20 @@ class Retriever:
         # This enables true hybrid search where BM25 searches the entire corpus,
         # not just the dense vector candidates
         self._bm25_index = BM25Index()
+        
+        # Initialize improved tokenization with NLTK if available
+        self._stemmer = None
+        self._stop_words = set()
+        if NLTK_AVAILABLE:
+            try:
+                # Download required NLTK data if not present
+                nltk.download('punkt', quiet=True)
+                nltk.download('stopwords', quiet=True)
+                self._stemmer = PorterStemmer()
+                self._stop_words = set(stopwords.words('english'))
+                logger.info("NLTK tokenization enabled with stemming and stopword filtering")
+            except Exception as exc:
+                logger.warning("Failed to initialize NLTK tokenization: %s", exc)
         
         logger.info(
             "Retriever initialized with strategy=%s, k=%d, candidates=%d",
@@ -117,6 +141,7 @@ class Retriever:
                 distance=result.distance,
                 retrieval_strategy=result.retrieval_strategy,
                 rerank_score=result.rerank_score,
+                normalized_score=result.normalized_score,
             )
             for rank, result in enumerate(final_results, start=1)
         ]
@@ -158,10 +183,11 @@ class Retriever:
             k=settings.retrieval_candidate_k,
             metadata_filter=metadata_filter,
         )
-        return [
+        results = [
             RetrievalResult(rank=rank, document=document, distance=distance, retrieval_strategy="similarity")
             for rank, (document, distance) in enumerate(dense_results, start=1)
         ]
+        return self._normalize_scores(results, strategy="similarity")
 
     # Retrieve diverse dense candidates using Maximum Marginal Relevance.
     def _mmr_search(
@@ -176,10 +202,11 @@ class Retriever:
             lambda_mult=settings.retrieval_mmr_lambda_mult,
             metadata_filter=metadata_filter,
         )
-        return [
+        results = [
             RetrievalResult(rank=rank, document=document, distance=float(rank), retrieval_strategy="mmr")
             for rank, document in enumerate(documents, start=1)
         ]
+        return self._normalize_scores(results, strategy="mmr")
 
     # Combine dense retrieval and full corpus BM25 search with Reciprocal Rank Fusion.
     # RAG Concept: True Hybrid Search
@@ -216,7 +243,8 @@ class Retriever:
             len(dense_results),
             len(bm25_results),
         )
-        return fused_results
+        
+        return self._normalize_scores(fused_results, strategy="hybrid")
 
     # Convert BM25 ranked results to RetrievalResult format by fetching documents from vector store
     # RAG Concept: Bridging Lexical and Vector Search
@@ -518,7 +546,111 @@ class Retriever:
     def _result_key(self, result: RetrievalResult) -> str:
         return str(result.chunk_id) if result.chunk_id != "Unknown" else result.document.page_content
 
-    # Tokenize text for lightweight BM25 scoring.
-    @staticmethod
-    def _tokenize(text: str) -> list[str]:
-        return re.findall(r"[a-zA-Z0-9]+", text.lower())
+    # Tokenize text for lightweight BM25 scoring with improved NLP when available.
+    def _tokenize(self, text: str) -> list[str]:
+        """Tokenize text with stemming and stopword filtering when NLTK is available."""
+        # Basic tokenization
+        tokens = re.findall(r"[a-zA-Z0-9]+", text.lower())
+        
+        # Apply stemming and stopword filtering if NLTK is available
+        if NLTK_AVAILABLE and self._stemmer:
+            tokens = [
+                self._stemmer.stem(token)
+                for token in tokens
+                if token not in self._stop_words and len(token) > 2
+            ]
+        
+        return tokens
+
+    # Normalize scores across different retrieval strategies to 0-1 range.
+    def _normalize_scores(self, results: list[RetrievalResult], strategy: str) -> list[RetrievalResult]:
+        """Normalize retrieval scores to 0-1 range for consistent comparison."""
+        if not results:
+            return results
+        
+        normalized_results = []
+        
+        if strategy == "similarity":
+            # Similarity distance: lower is better (cosine distance)
+            # Convert to 0-1 where 1 is best match
+            distances = [r.distance for r in results if r.distance is not None]
+            if distances:
+                min_dist, max_dist = min(distances), max(distances)
+                if max_dist > min_dist:
+                    for result in results:
+                        if result.distance is not None:
+                            normalized = 1.0 - (result.distance - min_dist) / (max_dist - min_dist)
+                            result.normalized_score = round(normalized, 4)
+                        else:
+                            result.normalized_score = 0.0
+                        normalized_results.append(result)
+                else:
+                    for result in results:
+                        result.normalized_score = 1.0 if result.distance is not None else 0.0
+                        normalized_results.append(result)
+            else:
+                for result in results:
+                    result.normalized_score = 0.0
+                    normalized_results.append(result)
+                    
+        elif strategy == "mmr":
+            # MMR uses rank as distance: lower rank is better
+            # Convert to 0-1 where 1 is best match
+            max_rank = max((r.distance for r in results), default=1)
+            for result in results:
+                normalized = 1.0 - (result.distance - 1) / max(1, max_rank - 1)
+                result.normalized_score = round(normalized, 4)
+                normalized_results.append(result)
+                
+        elif strategy == "hybrid":
+            # Hybrid uses RRF scores: higher is better
+            # Already in reasonable range, just normalize to 0-1
+            rrf_scores = [r.distance for r in results if r.distance is not None]
+            if rrf_scores:
+                min_score, max_score = min(rrf_scores), max(rrf_scores)
+                if max_score > min_score:
+                    for result in results:
+                        if result.distance is not None:
+                            normalized = (result.distance - min_score) / (max_score - min_score)
+                            result.normalized_score = round(normalized, 4)
+                        else:
+                            result.normalized_score = 0.0
+                        normalized_results.append(result)
+                else:
+                    for result in results:
+                        result.normalized_score = 1.0 if result.distance is not None else 0.0
+                        normalized_results.append(result)
+            else:
+                for result in results:
+                    result.normalized_score = 0.0
+                    normalized_results.append(result)
+                    
+        elif strategy == "bm25":
+            # BM25 scores: higher is better
+            # Already in reasonable range, just normalize to 0-1
+            bm25_scores = [abs(r.distance) for r in results if r.distance is not None]
+            if bm25_scores:
+                min_score, max_score = min(bm25_scores), max(bm25_scores)
+                if max_score > min_score:
+                    for result in results:
+                        if result.distance is not None:
+                            normalized = (abs(result.distance) - min_score) / (max_score - min_score)
+                            result.normalized_score = round(normalized, 4)
+                        else:
+                            result.normalized_score = 0.0
+                        normalized_results.append(result)
+                else:
+                    for result in results:
+                        result.normalized_score = 1.0 if result.distance is not None else 0.0
+                        normalized_results.append(result)
+            else:
+                for result in results:
+                    result.normalized_score = 0.0
+                    normalized_results.append(result)
+        else:
+            # Unknown strategy, just set to 0
+            for result in results:
+                result.normalized_score = 0.0
+                normalized_results.append(result)
+        
+        return normalized_results

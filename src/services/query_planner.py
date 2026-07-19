@@ -1,5 +1,7 @@
+import hashlib
 import json
 import re
+from functools import lru_cache
 
 from src.config.settings import settings
 from src.llm.base import LLMGateway
@@ -10,10 +12,13 @@ logger = get_logger(__name__)
 
 
 class QueryPlanner:
-    """Builds optional expansion and decomposition queries for retrieval."""
+    """Builds optional expansion and decomposition queries for retrieval with caching."""
 
     def __init__(self, llm_gateway: LLMGateway) -> None:
         self._llm_gateway = llm_gateway
+        self._expansion_cache: dict[str, list[str]] = {}
+        self._decomposition_cache: dict[str, list[str]] = {}
+        self._cache_max_size = 100
 
     async def build_queries(
         self,
@@ -31,14 +36,14 @@ class QueryPlanner:
         if use_query_expansion:
             expanded_queries = []
             if planning_calls_remaining > 0:
-                expanded_queries = await self._generate_variants(question)
+                expanded_queries = await self._generate_variants_cached(question)
                 planning_calls_remaining -= 1
             queries.extend(expanded_queries or self._heuristic_variants(question))
 
         if use_query_decomposition:
             subquestions = []
             if planning_calls_remaining > 0:
-                subquestions = await self._generate_subquestions(question)
+                subquestions = await self._generate_subquestions_cached(question)
             queries.extend(subquestions or self._heuristic_subquestions(question))
 
         return self._deduplicate(queries)
@@ -66,6 +71,53 @@ class QueryPlanner:
             retrieval_confidence is not None
             and retrieval_confidence < settings.query_planning_low_confidence_threshold
         )
+
+    async def _generate_variants_cached(self, question: str) -> list[str]:
+        """Generate query variants with caching to reduce LLM calls."""
+        cache_key = self._get_cache_key(question)
+        
+        if cache_key in self._expansion_cache:
+            logger.info("Query expansion cache hit for: %s", question[:50])
+            return self._expansion_cache[cache_key]
+        
+        variants = await self._generate_variants(question)
+        
+        # Cache the result
+        if len(self._expansion_cache) >= self._cache_max_size:
+            # Remove oldest entry (simple FIFO)
+            oldest_key = next(iter(self._expansion_cache))
+            del self._expansion_cache[oldest_key]
+        
+        self._expansion_cache[cache_key] = variants
+        logger.info("Cached query expansion results for: %s", question[:50])
+        
+        return variants
+
+    async def _generate_subquestions_cached(self, question: str) -> list[str]:
+        """Generate subquestions with caching to reduce LLM calls."""
+        cache_key = self._get_cache_key(question)
+        
+        if cache_key in self._decomposition_cache:
+            logger.info("Query decomposition cache hit for: %s", question[:50])
+            return self._decomposition_cache[cache_key]
+        
+        subquestions = await self._generate_subquestions(question)
+        
+        # Cache the result
+        if len(self._decomposition_cache) >= self._cache_max_size:
+            # Remove oldest entry (simple FIFO)
+            oldest_key = next(iter(self._decomposition_cache))
+            del self._decomposition_cache[oldest_key]
+        
+        self._decomposition_cache[cache_key] = subquestions
+        logger.info("Cached query decomposition results for: %s", question[:50])
+        
+        return subquestions
+
+    def _get_cache_key(self, question: str) -> str:
+        """Generate a cache key from the question."""
+        normalized = " ".join(question.lower().split())
+        return hashlib.md5(normalized.encode()).hexdigest()
 
     async def _generate_variants(self, question: str) -> list[str]:
         prompt = (

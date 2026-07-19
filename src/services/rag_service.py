@@ -12,6 +12,7 @@ from src.retrievers.retriever import RetrievalResult, Retriever
 from src.prompts.prompt_builder import PromptBuilder, ContextBuilder
 from src.services.query_planner import QueryPlanner
 from src.utils.metadata_filters import build_metadata_filter, parse_metadata_filter
+from src.schemas.structured_output import StructuredRAGOutput
 
 
 logger = get_logger(__name__)
@@ -269,7 +270,7 @@ class RAGService:
             return []
 
         normalized_history: list[dict[str, str]] = []
-        for turn in conversation_history[-settings.conversation_memory_max_turns * 2:]:
+        for turn in conversation_history:
             if isinstance(turn, dict) and "role" in turn and "content" in turn:
                 normalized_history.append(
                     {
@@ -277,7 +278,47 @@ class RAGService:
                         "content": str(turn.get("content", "")),
                     }
                 )
-        return normalized_history
+        
+        # First limit by turns as a safety measure
+        turn_limited = normalized_history[-settings.conversation_memory_max_turns * 2:]
+        
+        # Then limit by tokens (more accurate for prompt length)
+        token_limited = self._limit_by_tokens(turn_limited, settings.conversation_memory_max_tokens)
+        
+        return token_limited
+
+    def _limit_by_tokens(self, conversation_history: list[dict[str, str]], max_tokens: int) -> list[dict[str, str]]:
+        """Limit conversation history by estimated token count."""
+        if not conversation_history:
+            return []
+        
+        # Estimate tokens (rough approximation: ~4 chars per token)
+        def estimate_tokens(text: str) -> int:
+            return len(text) // 4
+        
+        # Build history from most recent to oldest, tracking token count
+        limited_history: list[dict[str, str]] = []
+        total_tokens = 0
+        
+        # Process in reverse order (most recent first)
+        for turn in reversed(conversation_history):
+            turn_tokens = estimate_tokens(turn.get("content", ""))
+            
+            if total_tokens + turn_tokens > max_tokens and limited_history:
+                # Adding this turn would exceed limit, stop here
+                break
+            
+            limited_history.insert(0, turn)
+            total_tokens += turn_tokens
+        
+        logger.info(
+            "Conversation history limited to %d turns (%d estimated tokens, max %d)",
+            len(limited_history),
+            total_tokens,
+            max_tokens,
+        )
+        
+        return limited_history
 
     # Maintain bounded local conversation memory after each RAG answer.
     def update_conversation_history(
@@ -475,22 +516,27 @@ class RAGService:
 
         return valid_claims
 
-    # Append strict JSON and citation instructions to the RAG prompt.
+    # Append strict JSON and citation instructions to the RAG prompt using Pydantic schema.
     @staticmethod
     def _with_structured_output_instructions(prompt: str) -> str:
+        from src.schemas.structured_output import Citation, Claim
+        
+        schema_example = json.dumps(StructuredRAGOutput(
+            answer="clear answer based only on the provided context",
+            claims=[
+                Claim(
+                    text="single factual statement",
+                    citations=[Citation(source="source filename or path", page="page number or Unknown")]
+                )
+            ],
+            citations=[Citation(source="source filename or path", page="page number or Unknown")]
+        ).to_dict(), indent=2)
+        
         return (
             prompt
             + "\n\nReturn ONLY valid JSON with this shape:\n"
-            + '{\n'
-            + '  "answer": "clear answer based only on the provided context",\n'
-            + '  "claims": [\n'
-            + '    {"text": "single factual statement", "citations": [{"source": "source filename or path", "page": "page number or Unknown"}]}\n'
-            + "  ],\n"
-            + '  "citations": [\n'
-            + '    {"source": "source filename or path", "page": "page number or Unknown"}\n'
-            + "  ]\n"
-            + "}\n"
-            + "Every factual statement in answer must appear as one claim with at least one valid citation.\n"
+            + schema_example
+            + "\n\nEvery factual statement in answer must appear as one claim with at least one valid citation.\n"
         )
 
     # Parse the model response into the expected structured answer schema.

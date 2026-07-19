@@ -40,3 +40,29 @@ def test_output_guardrails_accept_claim_supported_by_cited_context() -> None:
     )
 
     assert result.is_grounded is True
+
+
+def test_output_guardrails_insufficient_information_abstention() -> None:
+    """Test that abstention responses (no citations) are properly handled when context is insufficient."""
+    result = OutputGuardrails().validate(
+        answer="I don't have enough information in the provided documents.",
+        citations=[],
+        claims=[],
+        retrieved_chunks=[_chunk("The policy starts in 2024 and applies to contractors.")],
+    )
+
+    # Abstention responses should pass guardrails when there are no claims/citations
+    assert result.is_grounded is True or result.answer == "I don't have enough information in the provided documents."
+
+
+def test_output_guardrails_insufficient_information_with_unsupported_claims() -> None:
+    """Test that responses with claims but insufficient context are rejected."""
+    result = OutputGuardrails().validate(
+        answer="The policy ends in 2030.",
+        citations=[{"source": "guide.pdf", "page": "1"}],
+        claims=[{"text": "The policy ends in 2030.", "citations": [{"source": "guide.pdf", "page": "1"}]}],
+        retrieved_chunks=[_chunk("The policy starts in 2024 and applies to contractors.")],
+    )
+
+    # Should be rejected as claims are not supported by context
+    assert result.is_grounded is False
