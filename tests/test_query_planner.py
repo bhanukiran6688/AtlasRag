@@ -1,5 +1,5 @@
 import pytest
-from unittest.mock import Mock, AsyncMock
+from unittest.mock import Mock, AsyncMock, patch
 from src.services.query_planner import QueryPlanner
 
 
@@ -14,7 +14,8 @@ class TestQueryPlanner:
     def query_planner(self, mock_gateway):
         return QueryPlanner(mock_gateway)
 
-    def test_build_queries_returns_original_when_disabled(
+    @pytest.mark.asyncio
+    async def test_build_queries_returns_original_when_disabled(
         self, query_planner, monkeypatch
     ):
         monkeypatch.setattr(
@@ -27,12 +28,13 @@ class TestQueryPlanner:
             ),
         )
 
-        result = query_planner.build_queries(
+        result = await query_planner.build_queries(
             "test question", use_query_expansion=False, use_query_decomposition=False
         )
         assert result == ["test question"]
 
-    def test_build_queries_with_expansion_enabled(self, query_planner, monkeypatch):
+    @pytest.mark.asyncio
+    async def test_build_queries_with_expansion_enabled(self, query_planner, monkeypatch):
         monkeypatch.setattr(
             "src.config.settings.settings",
             Mock(
@@ -44,7 +46,7 @@ class TestQueryPlanner:
             ),
         )
 
-        result = query_planner.build_queries(
+        result = await query_planner.build_queries(
             "test question with many words",
             use_query_expansion=True,
             use_query_decomposition=False,
@@ -52,7 +54,8 @@ class TestQueryPlanner:
         assert len(result) >= 1
         assert "test question with many words" in result
 
-    def test_build_queries_with_decomposition_enabled(self, query_planner, monkeypatch):
+    @pytest.mark.asyncio
+    async def test_build_queries_with_decomposition_enabled(self, query_planner, monkeypatch):
         monkeypatch.setattr(
             "src.config.settings.settings",
             Mock(
@@ -64,7 +67,7 @@ class TestQueryPlanner:
             ),
         )
 
-        result = query_planner.build_queries(
+        result = await query_planner.build_queries(
             "test question with many words",
             use_query_expansion=False,
             use_query_decomposition=True,
@@ -74,12 +77,9 @@ class TestQueryPlanner:
     def test_should_expand_returns_true_when_adaptive_disabled(
         self, query_planner, monkeypatch
     ):
-        monkeypatch.setattr(
-            "src.config.settings.settings", Mock(query_planning_adaptive_enabled=False)
-        )
-
-        result = query_planner._should_expand("test", None)
-        assert result is True
+        with patch("src.services.query_planner.settings.query_planning_adaptive_enabled", False):
+            result = query_planner._should_expand("test", None)
+            assert result is True
 
     def test_should_expand_with_low_confidence(self, query_planner, monkeypatch):
         monkeypatch.setattr(

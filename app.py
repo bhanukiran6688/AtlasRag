@@ -3,14 +3,19 @@ import streamlit as st
 
 from src.utils.logger import get_logger
 from src.utils.exceptions import RAGConfigurationError
-from src.utils.metadata_filters import build_metadata_filter as build_validated_metadata_filter, parse_metadata_filter
+from src.utils.metadata_filters import (
+    build_metadata_filter as build_validated_metadata_filter,
+    parse_metadata_filter
+)
 from src.config.settings import settings
 from src.services.factory import create_rag_service
 
-
 logger = get_logger(__name__)
 
-warnings.filterwarnings(action="ignore", message=r".*Accessing `__path__`.*",)
+warnings.filterwarnings(
+    action="ignore",
+    message=r".*Accessing `__path__`.*"
+)
 
 
 # Build the RAG service and shared retrieval/LLM dependencies once per app session.
@@ -27,7 +32,13 @@ def main() -> None:
     st.set_page_config(page_title="RAG Playground", page_icon="🔍", layout="wide")
     st.title("🔍 RAG Playground")
     st.caption("Phase 2 - Retrieval & Context Builder")
-    query = st.text_input(label="Ask a question", placeholder="Example: What is Redis?",) or ""
+    query = (
+        st.text_input(
+            label="Ask a question",
+            placeholder="Example: What is Redis?",
+        )
+        or ""
+    )
     use_query_expansion = st.checkbox(
         label="Use query expansion",
         value=False,
@@ -46,8 +57,12 @@ def main() -> None:
             st.caption("No prior turns yet.")
 
     with st.expander("Metadata Filters", expanded=False):
-        filter_source = st.text_input(label="Source", placeholder="Exact source metadata value")
-        filter_file_type = st.text_input(label="File type", placeholder="pdf, md, txt, csv, json, docx")
+        filter_source = st.text_input(
+            label="Source", placeholder="Exact source metadata value"
+        )
+        filter_file_type = st.text_input(
+            label="File type", placeholder="pdf, md, txt, csv, json, docx"
+        )
         filter_metadata_json = st.text_area(
             label="Custom metadata JSON",
             placeholder='{"department": "finance"}',
@@ -95,7 +110,9 @@ def main() -> None:
 
     if result.sanitized_question and result.sanitized_question != result.question:
         st.info("Sensitive information was redacted before processing the question.")
-        st.text_area(label="Sanitized Question", value=result.sanitized_question, height=100)
+        st.text_area(
+            label="Sanitized Question", value=result.sanitized_question, height=100
+        )
 
     if result.pii_detected:
         st.caption(f"PII redacted: {', '.join(result.pii_detected)}")
@@ -125,7 +142,11 @@ def main() -> None:
         # FEATURE: Grounding confidence visibility
         col7.metric(
             label="Grounding Confidence",
-            value=f"{result.grounding_confidence:.3f}" if result.grounding_confidence is not None else "n/a",
+            value=(
+                f"{result.grounding_confidence:.3f}"
+                if result.grounding_confidence is not None
+                else "n/a"
+            )
         )
 
     if result.error:
@@ -137,10 +158,19 @@ def main() -> None:
 
     st.subheader("Retrieval Summary")
     col1, col2, col3, col4 = st.columns(4)
-    col1.metric(label="Retrieval Time", value=f"{retriever.last_retrieval_time_ms:.2f} ms",)
+    col1.metric(
+        label="Retrieval Time",
+        value=f"{retriever.last_retrieval_time_ms:.2f} ms",
+    )
     col2.metric(label="Top-K", value=retriever.k)
-    col3.metric(label="Threshold", value=retriever.score_threshold,)
-    col4.metric(label="Returned", value=f"{retriever.last_returned_results}/{retriever.last_total_results}")
+    col3.metric(
+        label="Threshold",
+        value=retriever.score_threshold
+    )
+    col4.metric(
+        label="Returned",
+        value=f"{retriever.last_returned_results}/{retriever.last_total_results}"
+    )
     results = result.retrieved_chunks
     if not results:
         st.warning("No relevant chunks found.")
@@ -148,7 +178,9 @@ def main() -> None:
 
     st.subheader("Retrieved Chunks")
     for chunk in results:
-        with st.expander(label=f"Rank {chunk.rank} | Score {chunk.distance:.4f}", expanded=False):
+        with st.expander(
+            label=f"Rank {chunk.rank} | Score {chunk.distance:.4f}", expanded=False
+        ):
             col1, col2 = st.columns(2)
             with col1:
                 st.metric(label="Distance", value=f"{chunk.distance:.4f}")
@@ -157,7 +189,9 @@ def main() -> None:
 
             with col2:
                 st.metric(label="Source", value=chunk.source)
-                st.metric(label="Page", value=chunk.page if chunk.page is not None else "-")
+                st.metric(
+                    label="Page", value=chunk.page if chunk.page is not None else "-"
+                )
                 if chunk.rerank_score is not None:
                     st.metric(label="Rerank Score", value=f"{chunk.rerank_score:.4f}")
 

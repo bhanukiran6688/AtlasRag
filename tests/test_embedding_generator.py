@@ -41,64 +41,47 @@ class TestHuggingFaceEmbeddingAdapter:
 
 
 class TestEmbeddingGenerator:
-    def test_huggingface_provider_initialization(self, monkeypatch):
-        monkeypatch.setattr(
-            "src.config.settings.settings",
-            Mock(
-                embedding_provider="huggingface",
-                embedding_model="test-model",
-                validate_embedding_configuration=Mock(),
-            ),
-        )
-
-        with patch(
-            "src.embeddings.embedding_generator.HuggingFaceEmbeddingAdapter"
-        ) as mock_adapter:
+    def test_huggingface_provider_initialization(self):
+        mock_settings = Mock()
+        mock_settings.embedding_provider = "huggingface"
+        mock_settings.embedding_model = "test-model"
+        mock_settings.validate_embedding_configuration = Mock()
+        
+        with patch("src.embeddings.embedding_generator.settings", mock_settings), \
+             patch("src.embeddings.embedding_generator.HuggingFaceEmbeddingAdapter") as mock_adapter:
+            EmbeddingGenerator()
             mock_adapter.assert_called_once_with("test-model")
 
-    def test_gemini_provider_initialization(self, monkeypatch):
-        monkeypatch.setattr(
-            "src.config.settings.settings",
-            Mock(
-                embedding_provider="gemini",
-                embedding_model="test-model",
-                validate_embedding_configuration=Mock(),
-            ),
-        )
-
-        with patch(
-            "src.embeddings.embedding_generator.GoogleGenerativeAIEmbeddings"
-        ) as mock_embeddings:
+    def test_gemini_provider_initialization(self):
+        mock_settings = Mock()
+        mock_settings.embedding_provider = "gemini"
+        mock_settings.embedding_model = "test-model"
+        mock_settings.validate_embedding_configuration = Mock()
+        
+        with patch("src.embeddings.embedding_generator.settings", mock_settings), \
+             patch("src.embeddings.embedding_generator.GoogleGenerativeAIEmbeddings") as mock_embeddings:
+            EmbeddingGenerator()
             mock_embeddings.assert_called_once_with(model="test-model")
 
-    def test_unsupported_provider_raises_error(self, monkeypatch):
-        monkeypatch.setattr(
-            "src.config.settings.settings",
-            Mock(
-                embedding_provider="unsupported",
-                embedding_model="test-model",
-                validate_embedding_configuration=Mock(),
-            ),
-        )
+    def test_unsupported_provider_raises_error(self):
+        mock_settings = Mock()
+        mock_settings.embedding_provider = "unsupported"
+        mock_settings.embedding_model = "test-model"
+        mock_settings.validate_embedding_configuration = Mock()
+        
+        with patch("src.embeddings.embedding_generator.settings", mock_settings):
+            with pytest.raises(ValueError, match="Unsupported embedding provider"):
+                EmbeddingGenerator()
 
-        with pytest.raises(ValueError, match="Unsupported embedding provider"):
-            EmbeddingGenerator()
-
-    def test_get_embeddings_returns_configured_embeddings(self, monkeypatch):
+    def test_get_embeddings_returns_configured_embeddings(self):
         mock_embeddings = Mock()
-        monkeypatch.setattr(
-            "src.config.settings.settings",
-            Mock(
-                embedding_provider="huggingface",
-                embedding_model="test-model",
-                validate_embedding_configuration=Mock(),
-            ),
-        )
-
-        with patch(
-            "src.embeddings.embedding_generator.HuggingFaceEmbeddingAdapter",
-            return_value=mock_embeddings,
-        ):
+        mock_settings = Mock()
+        mock_settings.embedding_provider = "huggingface"
+        mock_settings.embedding_model = "test-model"
+        mock_settings.validate_embedding_configuration = Mock()
+        
+        with patch("src.embeddings.embedding_generator.settings", mock_settings), \
+             patch("src.embeddings.embedding_generator.HuggingFaceEmbeddingAdapter", return_value=mock_embeddings):
             generator = EmbeddingGenerator()
             result = generator.get_embeddings()
             assert result == mock_embeddings

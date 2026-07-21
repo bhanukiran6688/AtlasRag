@@ -81,6 +81,7 @@ Return ONLY valid JSON with this format:
 
             # Parse the verification result
             import json
+
             result = json.loads(response.content)
             is_supported = result.get("is_supported", False)
             reason = result.get("reason", "")
@@ -95,7 +96,9 @@ Return ONLY valid JSON with this format:
             return is_supported, reason
 
         except Exception as exc:
-            logger.warning("Semantic verification failed: %s. Falling back to conservative.", exc)
+            logger.warning(
+                "Semantic verification failed: %s. Falling back to conservative.", exc
+            )
             # Conservative fallback: reject claim if verification fails
             return False, f"Verification failed: {exc}"
 

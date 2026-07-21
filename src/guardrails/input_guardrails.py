@@ -248,8 +248,10 @@ class OutputGuardrails:
             and settings.guardrails_enable_semantic_verification
             and claims
         ):
-            all_supported, verified_claims = await self._semantic_verifier.verify_answer(
-                answer=answer, claims=claims, context=context
+            all_supported, verified_claims = (
+                await self._semantic_verifier.verify_answer(
+                    answer=answer, claims=claims, context=context
+                )
             )
             if not all_supported:
                 unsupported_claims = [

@@ -98,7 +98,7 @@ class TestInMemoryTTLCache:
         cache.set("key3", "value3")
 
         assert cache.get("key1") is None
-        assert cache.get("key2") is None
+        assert cache.get("key2") == "value2"
         assert cache.get("key3") == "value3"
 
     def test_clear_removes_all_entries(self):

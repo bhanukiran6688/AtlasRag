@@ -64,7 +64,7 @@ class TestContextBuilder:
     def test_count_tokens_estimates_token_count(self):
         text = "This is a test sentence with seven words"
         result = ContextBuilder._count_tokens(text)
-        assert result == 7
+        assert result == 8
 
     def test_truncate_context_returns_full_context_when_under_limit(self, monkeypatch):
         monkeypatch.setattr(

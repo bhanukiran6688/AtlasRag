@@ -241,7 +241,7 @@ class RAGService:
                 )
 
             logger.info("RAG pipeline completed successfully.")
-            return self._build_result(
+            return await self._build_result(
                 question=question,
                 sanitized_question=sanitized_question,
                 retrieved_chunks=retrieved_chunks,
@@ -435,7 +435,7 @@ class RAGService:
             raise RetrievalError(f"Invalid metadata filter: {exc}") from exc
 
     # Build the final RAG result after structured parsing and output guardrails.
-    def _build_result(
+    async def _build_result(
         self,
         question: str,
         sanitized_question: str,
@@ -455,7 +455,7 @@ class RAGService:
         )
         citations = RAGService._extract_citations(structured_output)
         claims = RAGService._extract_claims(structured_output)
-        output_guardrail_result = self._output_guardrails.validate(
+        output_guardrail_result = await self._output_guardrails.validate(
             answer=answer or "",
             citations=citations,
             retrieved_chunks=retrieved_chunks,

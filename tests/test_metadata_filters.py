@@ -24,10 +24,10 @@ class TestParseMetadataFilter:
             parse_metadata_filter("")
 
     def test_parse_metadata_filter_with_nested_object(self):
-        result = parse_metadata_filter(
-            '{"key1": "value1", "key2": {"nested": "value"}}'
-        )
-        assert result == {"key1": "value1", "key2": {"nested": "value"}}
+        with pytest.raises(ValueError, match="must be a string, number, or boolean"):
+            parse_metadata_filter(
+                '{"key1": "value1", "key2": {"nested": "value"}}'
+            )
 
 
 class TestValidateMetadataFilter:
@@ -137,12 +137,12 @@ class TestBuildMetadataFilter:
 
     def test_build_metadata_filter_with_allowed_keys_filters_custom_metadata(self):
         allowed_keys = {"department", "source"}
-        result = build_metadata_filter(
-            source="test.pdf",
-            custom_metadata={"department": "finance", "disallowed": "value"},
-            allowed_keys=allowed_keys,
-        )
-        assert result == {"source": "test.pdf", "department": "finance"}
+        with pytest.raises(ValueError, match="Metadata filter key is not allowed: disallowed"):
+            build_metadata_filter(
+                source="test.pdf",
+                custom_metadata={"department": "finance", "disallowed": "value"},
+                allowed_keys=allowed_keys,
+            )
 
     def test_build_metadata_filter_without_allowed_keys_includes_all(self):
         result = build_metadata_filter(

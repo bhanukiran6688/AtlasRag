@@ -1,3 +1,4 @@
+import pytest
 from langchain_core.documents import Document
 
 from src.guardrails.input_guardrails import InputGuardrails, OutputGuardrails
@@ -23,8 +24,9 @@ def test_input_guardrails_block_normalized_prompt_injection() -> None:
     assert result.blocked_reason == "Prompt injection attempt detected."
 
 
-def test_output_guardrails_reject_claim_without_cited_context_support() -> None:
-    result = OutputGuardrails().validate(
+@pytest.mark.asyncio
+async def test_output_guardrails_reject_claim_without_cited_context_support() -> None:
+    result = await OutputGuardrails().validate(
         answer="The guide says the policy starts in 2025.",
         citations=[{"source": "guide.pdf", "page": "1"}],
         claims=[
@@ -42,8 +44,9 @@ def test_output_guardrails_reject_claim_without_cited_context_support() -> None:
     assert "sufficiently supported" in (result.grounding_reason or "")
 
 
-def test_output_guardrails_accept_claim_supported_by_cited_context() -> None:
-    result = OutputGuardrails().validate(
+@pytest.mark.asyncio
+async def test_output_guardrails_accept_claim_supported_by_cited_context() -> None:
+    result = await OutputGuardrails().validate(
         answer="The policy starts in 2024.",
         citations=[{"source": "guide.pdf", "page": "1"}],
         claims=[
@@ -60,7 +63,8 @@ def test_output_guardrails_accept_claim_supported_by_cited_context() -> None:
     assert result.is_grounded is True
 
 
-def test_output_guardrails_insufficient_information_abstention() -> None:
+@pytest.mark.asyncio
+async def test_output_guardrails_insufficient_information_abstention() -> None:
     """Test that abstention responses (no citations) are properly handled when context is insufficient.
 
     This test verifies the edge case where the RAG system correctly abstains from answering
@@ -70,7 +74,7 @@ def test_output_guardrails_insufficient_information_abstention() -> None:
 
     This addresses the code review concern about citation instruction conflicts with abstention.
     """
-    result = OutputGuardrails().validate(
+    result = await OutputGuardrails().validate(
         answer="I don't have enough information in the provided documents.",
         citations=[],
         claims=[],
@@ -86,7 +90,8 @@ def test_output_guardrails_insufficient_information_abstention() -> None:
     )
 
 
-def test_output_guardrails_insufficient_information_with_unsupported_claims() -> None:
+@pytest.mark.asyncio
+async def test_output_guardrails_insufficient_information_with_unsupported_claims() -> None:
     """Test that responses with claims but insufficient context are rejected.
 
     This test ensures that when the system makes factual claims without sufficient
@@ -97,7 +102,7 @@ def test_output_guardrails_insufficient_information_with_unsupported_claims() ->
     This complements the abstention test by verifying the negative case: claims without
     support should be blocked.
     """
-    result = OutputGuardrails().validate(
+    result = await OutputGuardrails().validate(
         answer="The policy ends in 2030.",
         citations=[{"source": "guide.pdf", "page": "1"}],
         claims=[
